@@ -236,8 +236,16 @@ function logOutput(): HTMLElement {
 function claimTable(): HTMLElement {
   const rows: Array<[string, string, string]> = [
     ['Which record was requested', 'Hidden by the protocol', 'Under decision RLWE at these parameters, and only then.'],
-    ['Response length', 'Hidden by the protocol', 'One ciphertext, the same size for every index — fixed by construction.'],
-    ['Query length', 'Hidden by the protocol', 'One ciphertext per shelf position, independent of which position.'],
+    [
+      'Whether the response length reveals it',
+      'Hidden by the protocol',
+      'One ciphertext, the same size for every index — fixed by construction, not by padding.',
+    ],
+    [
+      'Whether the query length reveals it',
+      'Hidden by the protocol',
+      'One ciphertext per shelf position, the same whichever position. The length announces the shelf size, never the index.',
+    ],
     ['That a query happened', 'NOT hidden', 'The request is visible to anyone on the path.'],
     ['When it happened', 'NOT hidden', 'Timing is a deployment concern: batching or a fixed schedule, not PIR.'],
     ['How often, and how many', 'NOT hidden', 'Rate and count leak. Cover traffic is a separate mechanism.'],
@@ -252,7 +260,9 @@ function claimTable(): HTMLElement {
       'caption',
       {},
       'What single-server PIR hides, what it does not, and which of those come from the ' +
-        'construction rather than from how it is deployed.'
+        'construction rather than from how it is deployed. Read each row as a question about ' +
+        'the INDEX: a length that is visible but constant reveals nothing about which record ' +
+        'was asked for, even though it does reveal how many there are.'
     ),
     el(
       'thead',

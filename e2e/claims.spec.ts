@@ -411,11 +411,24 @@ test.describe('the negative claim, shown', () => {
         'NOT hidden'
       );
     }
-    for (const property of ['Which record was requested', 'Response length']) {
+    for (const property of [
+      'Which record was requested',
+      'Whether the response length reveals it',
+      'Whether the query length reveals it',
+    ]) {
       await expect(table.locator('tr', { hasText: property }).locator('.pill-ok')).toContainText(
         'Hidden by the protocol'
       );
     }
+
+    // The table must not contradict itself: the query length is constant across
+    // INDICES (hidden) and simultaneously announces the SHELF SIZE (not hidden).
+    // Those are different facts about the same observable, and an earlier draft
+    // of this table stated them as if they were the same one.
+    await expect(
+      table.locator('tr', { hasText: 'The size of the database' }).locator('.pill-bad')
+    ).toContainText('NOT hidden');
+    await expect(table.locator('caption')).toContainText('a length that is visible but constant');
   });
 });
 

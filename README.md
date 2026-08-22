@@ -82,7 +82,7 @@ The threat model, and the four named failure codes.
 **What the protocol does not defend against.**
 
 - **A malicious server.** PIR provides no integrity. A server that wants to lie can return a different record with a matching tag; the tag is part of the record it holds. Verifiable PIR is a separate line of work.
-- **Traffic metadata.** Occurrence, timing, frequency, count, client identity and database size all leak. Response *length* does not — it is fixed by construction here — and neither does query length, which is one ciphertext per shelf position regardless of which position. Padding and traffic shaping are separate mechanisms; PIR does not claim them.
+- **Traffic metadata.** Occurrence, timing, frequency, count, client identity and database size all leak. What does *not* leak is the index: the response is one ciphertext of the same size whichever record you asked for, and the query is one ciphertext per shelf position whichever position it is. Those lengths are perfectly visible — they announce the shelf size — they simply do not vary with the answer, and that is by construction rather than by padding. Padding and traffic shaping are separate mechanisms for the things that do leak; PIR does not claim them.
 - **Access patterns over many queries.** Each query is individually private. Hiding the sequence is ORAM's job.
 - **A malformed client query.** Unauthenticated by construction — see *When to Use It*.
 - **Side channels.** Nothing here is constant time. The server's inner loop skips zero plaintext coefficients, so its running time depends on its own data; that costs nothing in this demo because the shelf is public, and it is exactly the shortcut a deployment must not take.
