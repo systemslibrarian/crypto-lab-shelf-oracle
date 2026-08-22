@@ -672,6 +672,19 @@ table.data caption {
   color: var(--ok-text);
   font-weight: 700;
 }
+/* WCAG 1.4.1: the word carries the meaning, the colour only reinforces it. */
+.win-tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--ok) 60%, var(--border));
+  background: color-mix(in oklab, var(--ok) 16%, var(--surface));
+  vertical-align: 1px;
+}
 
 /* ---------- key/value readouts ------------------------------------------ */
 

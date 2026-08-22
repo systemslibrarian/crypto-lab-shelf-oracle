@@ -168,11 +168,14 @@ function output(lab: Lab): HTMLElement {
     el(
       'tbody',
       {},
+      // WCAG 1.4.1. The winning cell is marked with the WORD "better" as well as
+      // the colour, because a reader who cannot see the green would otherwise
+      // lose the comparison entirely — and the comparison is the exhibit.
       rows.map(([label, left, right, better]) =>
         el('tr', {}, [
           el('th', { scope: 'row' }, label),
-          el('td', { class: better === 'a' ? 'win' : undefined }, left),
-          el('td', { class: better === 'b' ? 'win' : undefined }, right),
+          cell(left, better === 'a'),
+          cell(right, better === 'b'),
         ])
       )
     ),
@@ -183,12 +186,21 @@ function output(lab: Lab): HTMLElement {
     el(
       'p',
       { class: 'inline-note' },
-      `Green marks the better cell where "better" is unambiguous. Two servers win almost every ` +
-        `row — cheaper, faster, exact, and unconditionally private. The single row they lose is ` +
-        `the second one, and it is the reason single-server PIR exists at all.`
+      `Each row marks the better cell where "better" is unambiguous. Two servers win almost ` +
+        `every row — cheaper, faster, exact, and unconditionally private. The single row they ` +
+        `lose is the second one, and it is the reason single-server PIR exists at all.`
     ),
     collusionOutput(),
   ]);
+}
+
+/** One comparison cell: the value, and the word "better" where one side wins. */
+function cell(value: string, wins: boolean): HTMLElement {
+  return el(
+    'td',
+    { class: wins ? 'win' : undefined },
+    wins ? [value, ' ', el('span', { class: 'win-tag' }, 'better')] : value
+  );
 }
 
 function collusionOutput(): HTMLElement {
