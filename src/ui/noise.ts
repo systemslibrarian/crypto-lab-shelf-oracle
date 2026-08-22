@@ -1,4 +1,16 @@
-import { append, card, clear, disclose, el, kv, nextFrame, scroller, verdict } from './dom';
+import {
+  append,
+  card,
+  clear,
+  disclose,
+  el,
+  kv,
+  nextFrame,
+  panelStatus,
+  withFocusRestored,
+  scroller,
+  verdict,
+} from './dom';
 import type { Lab } from './state';
 import { buildQuery, decodeAnswer, serverAnswer, type DecodedAnswer } from '../pir/pir';
 import { maxBudgetBits, predictedBudgetBits, keyGen } from '../pir/bfv';
@@ -30,11 +42,26 @@ import { shelfToPlaintexts } from '../pir/records';
  * real client could actually run and the third is not.
  */
 
+interface Failure {
+  code: string;
+  detail: string;
+}
+
 interface PanelState {
   decoded: DecodedAnswer | null;
   text: string;
   running: boolean;
-  failure: { code: string; detail: string } | null;
+  /**
+   * A failure raised by the RETRIEVE button, and only that button.
+   *
+   * Kept separate from `tripFailure` because the two are different events with
+   * different meanings, and one field for both meant that pressing a demo
+   * failure-code button silently replaced the retrieval verdict at the top of the
+   * panel with a red failure that retrieval never produced.
+   */
+  runFailure: Failure | null;
+  /** A failure raised by one of the four demonstration buttons. */
+  tripFailure: Failure | null;
   /** Why the last retrieval was thrown away, or null if none was. */
   retired: string | null;
 }
@@ -43,7 +70,8 @@ const state: PanelState = {
   decoded: null,
   text: '',
   running: false,
-  failure: null,
+  runFailure: null,
+  tripFailure: null,
   retired: null,
 };
 
@@ -56,10 +84,15 @@ const state: PanelState = {
  * is printed, because a silently empty panel reads as "not run yet".
  */
 export function resetNoise(reason?: string): void {
-  if (state.decoded || state.failure) state.retired = reason ?? null;
+  // `|| state.retired` matters: after the first retirement there is no result
+  // left to guard on, so without it a SECOND parameter change would leave the
+  // first change's reason on screen — a retirement notice naming the wrong cause
+  // is worse than none.
+  if (state.decoded || state.runFailure || state.retired) state.retired = reason ?? null;
   state.decoded = null;
   state.text = '';
-  state.failure = null;
+  state.runFailure = null;
+  state.tripFailure = null;
 }
 
 export function renderNoise(root: HTMLElement, lab: Lab): void {
@@ -124,7 +157,7 @@ export function renderNoise(root: HTMLElement, lab: Lab): void {
           state.running ? 'Running…' : 'Retrieve at these settings'
         ),
       ]),
-      el('div', { 'data-role': 'out', role: 'status', 'aria-live': 'polite' }, runOutput(lab)),
+      el('div', { 'data-role': 'out' }, runOutput(lab)),
     ])
   );
 
@@ -166,16 +199,34 @@ export function renderNoise(root: HTMLElement, lab: Lab): void {
 
   append(root, card('The failure codes', failureLab()));
 
+  announce(root, noiseHeadline(s.selectedIndex, assessment.inTable));
+
   bind(root, lab);
+}
+
+function noiseHeadline(index: number, inTable: boolean): string {
+  if (state.runFailure) return `${state.runFailure.code}: the retrieval was refused.`;
+  const params = inTable
+    ? 'Parameters inside the published table.'
+    : 'PARAM_UNSAFE: parameters outside the published table.';
+  if (state.running) return `${params} Running a retrieval.`;
+  if (state.decoded) {
+    return state.decoded.failure
+      ? `${params} ${state.decoded.failure.code}: the answer came back and is wrong.`
+      : `${params} Retrieved position ${index} with ` +
+        `${state.decoded.budgetBits.toFixed(2)} bits of budget left.`;
+  }
+  if (state.retired) return `${params} Previous result retired: ${state.retired}.`;
+  return `${params} No retrieval run yet.`;
 }
 
 function runOutput(lab: Lab): HTMLElement {
   if (state.running) return el('p', { class: 'status-line' }, 'Encrypting, folding, decoding…');
-  if (state.failure) {
+  if (state.runFailure) {
     return verdict('fail', [
-      el('span', { class: 'fail-code' }, state.failure.code),
+      el('span', { class: 'fail-code' }, state.runFailure.code),
       ' — ',
-      state.failure.detail,
+      state.runFailure.detail,
     ]);
   }
   if (!state.decoded) {
@@ -217,10 +268,13 @@ function runOutput(lab: Lab): HTMLElement {
     el(
       'p',
       { class: 'inline-note' },
-      `The out-of-range count and the tag check are things a real client could do for itself. The ` +
-        `budget is not — measuring it needs the secret key AND the true record, and a client that ` +
-        `had the record would not be asking. That is why a PIR deployment sizes its parameters in ` +
-        `advance and does not discover exhaustion at runtime.`
+      `The out-of-range count and the tag check are things a real client could do for itself; the ` +
+        `budget is not, because measuring it needs the secret key AND the true record, and a ` +
+        `client that had the record would not be asking. Note how unequal the two client-side ` +
+        `checks are: just past the ceiling most coefficients still decode correctly and the few ` +
+        `that drift land on other legal nibbles, so the out-of-range count is often ZERO while the ` +
+        `record is already wrong. The tag is what notices. That is why a PIR deployment sizes its ` +
+        `parameters in advance and does not discover exhaustion at runtime.`
     ),
   ]);
 }
@@ -281,9 +335,12 @@ function failureLab(): HTMLElement {
     el(
       'p',
       { class: 'lede' },
-      `Four codes, each raised by real code on a real input. Every one of them stops the protocol ` +
-        `rather than returning something plausible — because a PIR answer that is quietly wrong is ` +
-        `indistinguishable from one that is quietly right, since the client cannot see the database.`
+      `Four codes, each raised by real code on a real input — and they divide in two. Three are ` +
+        `REFUSALS: the protocol stops before it can produce an answer at all. The fourth, ` +
+        `NOISE_BUDGET_EXHAUSTED, is a REPORT, and deliberately so — nothing can stop it, because ` +
+        `the ciphertext decrypts perfectly well and simply yields the wrong bytes. The whole ` +
+        `point is that a PIR answer which is quietly wrong looks exactly like one that is quietly ` +
+        `right, since the client cannot see the database. Naming it is all anyone can do.`
     ),
     el(
       'ul',
@@ -321,12 +378,12 @@ function failureLab(): HTMLElement {
     ]),
     el(
       'div',
-      { 'data-role': 'trip-out', role: 'status', 'aria-live': 'polite' },
-      state.failure
+      { 'data-role': 'trip-out' },
+      state.tripFailure
         ? verdict('fail', [
-            el('span', { class: 'fail-code' }, state.failure.code),
+            el('span', { class: 'fail-code' }, state.tripFailure.code),
             ' — ',
-            state.failure.detail,
+            state.tripFailure.detail,
           ])
         : el('p', { class: 'status-line' }, 'No failure raised. Press one of the buttons above.')
     ),
@@ -379,8 +436,8 @@ function bind(root: HTMLElement, lab: Lab): void {
   });
 
   root.querySelector<HTMLButtonElement>('[data-role="trip-clear"]')?.addEventListener('click', () => {
-    state.failure = null;
-    renderNoise(root, lab);
+    state.tripFailure = null;
+    redraw(root, lab);
   });
   root.querySelector<HTMLButtonElement>('[data-role="trip-dim"]')?.addEventListener('click', () => {
     trip(root, lab, () => {
@@ -413,16 +470,16 @@ function bind(root: HTMLElement, lab: Lab): void {
 function trip(root: HTMLElement, lab: Lab, fn: () => void): void {
   try {
     fn();
-    state.failure = {
+    state.tripFailure = {
       code: 'no failure',
       detail: 'that input was accepted — which is itself worth knowing about.',
     };
   } catch (e) {
-    state.failure = isPirError(e)
+    state.tripFailure = isPirError(e)
       ? { code: e.code, detail: e.detail }
       : { code: 'UNEXPECTED', detail: String(e) };
   }
-  renderNoise(root, lab);
+  redraw(root, lab);
 }
 
 /**
@@ -445,22 +502,22 @@ async function tripNoise(root: HTMLElement, lab: Lab): Promise<void> {
     s.recordBytes,
     bytesToCoefficients(s.records[s.selectedIndex], tiny.n)
   );
-  state.failure = decoded.failure
+  state.tripFailure = decoded.failure
     ? { code: decoded.failure.code, detail: decoded.failure.detail }
     : {
         code: 'no failure',
         detail: `the ${MODULI[0].label} modulus carried a ${s.shelfSize}-record answer after all — ` +
           `budget ${decoded.budgetBits.toFixed(2)} bits.`,
       };
-  renderNoise(root, lab);
+  redraw(root, lab);
 }
 
 async function run(root: HTMLElement, lab: Lab): Promise<void> {
   if (state.running) return;
   state.running = true;
-  state.failure = null;
+  state.runFailure = null;
   state.retired = null;
-  renderNoise(root, lab);
+  redraw(root, lab);
   await nextFrame();
 
   const s = lab.snapshot();
@@ -479,11 +536,31 @@ async function run(root: HTMLElement, lab: Lab): Promise<void> {
   } catch (e) {
     state.decoded = null;
     state.text = '';
-    state.failure =
+    state.runFailure =
       e instanceof PirError
         ? { code: e.code, detail: e.detail }
         : { code: 'UNEXPECTED', detail: String(e) };
   }
   state.running = false;
-  renderNoise(root, lab);
+  redraw(root, lab);
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
+}
+
+/**
+ * Re-render from an event handler WITHOUT throwing the keyboard reader away.
+ *
+ * A panel rebuilds its whole subtree, which destroys the control the reader is
+ * standing on. `main.ts` wraps the renders IT drives; these are the ones the
+ * panel drives itself — pressing a button, opening a disclosure, running a
+ * measurement — and they are the majority.
+ */
+function redraw(root: HTMLElement, lab: Lab): void {
+  withFocusRestored(root, () => renderNoise(root, lab));
 }

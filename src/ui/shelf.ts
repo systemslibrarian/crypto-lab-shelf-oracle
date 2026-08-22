@@ -1,4 +1,4 @@
-import { append, card, clear, disclose, el, kv, scroller, verdict } from './dom';
+import { append, card, clear, disclose, el, kv, panelStatus, scroller, verdict } from './dom';
 import type { Lab } from './state';
 import { RECORD_SIZES, SHELF_SIZES } from '../pir/params';
 import { recordText, TAG_BYTES, toHex } from '../pir/records';
@@ -25,9 +25,9 @@ export function renderShelf(root: HTMLElement, lab: Lab): void {
       el(
         'p',
         { class: 'lede' },
-        `Sixty-four public-domain works. Choose one — that choice, and nothing else, is what the ` +
-          `rest of this lab hides from the server. The shelf position you pick is the only secret ` +
-          `in the protocol.`
+        `${s.shelfSize} shelf positions of public-domain works. Choose one — that choice, and ` +
+          `nothing else, is what the rest of this lab hides from the server. The shelf position ` +
+          `you pick is the only secret in the protocol.`
       ),
       shelfControls(lab),
       el(
@@ -84,6 +84,15 @@ export function renderShelf(root: HTMLElement, lab: Lab): void {
   );
 
   append(root, card('This run', runControls(lab)));
+
+  announce(
+    root,
+    `Position ${s.selectedIndex} selected: ${entry.title} by ${entry.author}. ` +
+      `Shelf of ${s.shelfSize}, ${s.recordBytes}-byte records. ` +
+      (s.seed === null
+        ? 'Randomness from platform entropy.'
+        : `Run seed pinned to "${s.seed}" — the secret key is reproducible.`)
+  );
 
   bind(root, lab);
 }
@@ -168,7 +177,7 @@ function runControls(lab: Lab): HTMLElement[] {
     ]),
     el(
       'div',
-      { role: 'status', 'aria-live': 'polite', 'data-role': 'seed-status' },
+      { 'data-role': 'seed-status' },
       s.seed === null
         ? verdict('pass', [
             el('strong', {}, 'Seeded from platform entropy. '),
@@ -262,4 +271,12 @@ function bind(root: HTMLElement, lab: Lab): void {
   root.querySelector<HTMLButtonElement>('[data-role="new-key"]')?.addEventListener('click', () => {
     lab.regenerateKey();
   });
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
 }

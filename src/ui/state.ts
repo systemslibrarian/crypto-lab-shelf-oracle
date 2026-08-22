@@ -56,7 +56,7 @@ export class Lab {
   private records: Uint8Array[] = [];
   private plaintexts: Int32Array[] = [];
   private listeners = new Set<Listener>();
-  private lastChange = '';
+  private version = 0;
 
   private constructor(sk: SecretKey) {
     this.sk = sk;
@@ -96,13 +96,21 @@ export class Lab {
   }
 
   private emit(change: string): void {
-    this.lastChange = change;
+    this.version += 1;
     for (const listener of this.listeners) listener(change);
   }
 
-  /** The most recent parameter change, in the words the panels print. */
-  get changeReason(): string {
-    return this.lastChange;
+  /**
+   * Bumped on every parameter change.
+   *
+   * Read by anything that computes for longer than one frame: the distinguishing
+   * experiment runs 1,280 real RLWE encryptions and yields between them, so a
+   * reader can change the modulus halfway through. Comparing this before and
+   * after is how that result gets thrown away instead of printed beside
+   * parameters it was not measured under.
+   */
+  get parameterVersion(): number {
+    return this.version;
   }
 
   private async rebuildShelf(): Promise<void> {

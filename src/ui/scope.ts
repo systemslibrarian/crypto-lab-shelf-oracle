@@ -1,4 +1,16 @@
-import { append, card, clear, disclose, el, formatBytes, nextFrame, scroller, verdict } from './dom';
+import {
+  append,
+  card,
+  clear,
+  disclose,
+  el,
+  formatBytes,
+  nextFrame,
+  panelStatus,
+  withFocusRestored,
+  scroller,
+  verdict,
+} from './dom';
 import type { Lab } from './state';
 import { buildQuery, serverAnswer } from '../pir/pir';
 import { serializeCiphertext, serializeQuery } from '../pir/serialize';
@@ -44,7 +56,8 @@ const state: PanelState = { log: [], running: false, startedAt: null, retired: n
  * change clears it and says so.
  */
 export function resetScope(reason?: string): void {
-  if (state.log.length) state.retired = reason ?? null;
+  // `|| state.retired` so a second change updates the reason, not just the first.
+  if (state.log.length || state.retired) state.retired = reason ?? null;
   state.log = [];
   state.startedAt = null;
 }
@@ -76,7 +89,7 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         ),
         el('button', { class: 'btn', type: 'button', 'data-role': 'clear-log' }, 'Clear the log'),
       ]),
-      el('div', { 'data-role': 'log', role: 'status', 'aria-live': 'polite' }, logOutput()),
+      el('div', { 'data-role': 'log' }, logOutput()),
     ])
   );
 
@@ -155,6 +168,16 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
     ])
   );
 
+  announce(
+    root,
+    state.running
+      ? 'Running a query.'
+      : state.log.length === 0
+        ? 'The observer has seen no queries yet.'
+        : `The observer has seen ${state.log.length} quer${state.log.length === 1 ? 'y' : 'ies'}, ` +
+          `every one the same size and each at a different time.`
+  );
+
   bind(root, lab);
 }
 
@@ -221,8 +244,7 @@ function logOutput(): HTMLElement {
             el('strong', {}, 'The sizes differ across rows. '),
             `That is because the shelf length or record size changed between queries, not because ` +
               `the index leaked — but it is exactly the shape of leak that padding exists to stop.`,
-          ],
-      { live: true }
+          ]
     ),
     verdict('alarm', [
       el('strong', {}, `The observer knows ${state.log.length} quer${state.log.length === 1 ? 'y' : 'ies'} happened, and when. `),
@@ -370,7 +392,7 @@ function bind(root: HTMLElement, lab: Lab): void {
   });
   root.querySelector<HTMLButtonElement>('[data-role="clear-log"]')?.addEventListener('click', () => {
     resetScope();
-    renderScope(root, lab);
+    redraw(root, lab);
   });
 }
 
@@ -378,7 +400,7 @@ async function runQuery(root: HTMLElement, lab: Lab, index: number): Promise<voi
   if (state.running) return;
   state.running = true;
   state.retired = null;
-  renderScope(root, lab);
+  redraw(root, lab);
   await nextFrame();
 
   const s = lab.snapshot();
@@ -394,5 +416,25 @@ async function runQuery(root: HTMLElement, lab: Lab, index: number): Promise<voi
     downloadBytes: serializeCiphertext(s.params, answer).length,
   });
   state.running = false;
-  renderScope(root, lab);
+  redraw(root, lab);
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
+}
+
+/**
+ * Re-render from an event handler WITHOUT throwing the keyboard reader away.
+ *
+ * A panel rebuilds its whole subtree, which destroys the control the reader is
+ * standing on. `main.ts` wraps the renders IT drives; these are the ones the
+ * panel drives itself — pressing a button, opening a disclosure, running a
+ * measurement — and they are the majority.
+ */
+function redraw(root: HTMLElement, lab: Lab): void {
+  withFocusRestored(root, () => renderScope(root, lab));
 }

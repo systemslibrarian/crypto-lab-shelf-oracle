@@ -128,8 +128,12 @@ export function delta(p: PirParams): number {
  * centre-lifted ciphertext coefficient (magnitude at most q/2) by a plaintext
  * coefficient (at most t - 1) before it reduces, so that product is the bound.
  *
- * The margin at the shipped parameters is enormous — about 2^40 of headroom at
- * q = 2^26 — which is exactly why this could rot unnoticed without a check.
+ * At the shipped parameters the bound is 1024 * 2^25 * 16 — a shade under 2^39,
+ * so 2^14 of headroom. Since the bound is linear in each of n, q and t, that is
+ * fourteen doublings shared between the three of them, and the top modulus this
+ * lab already offers spends four: at q = 2^30 the bound is 2^43 and only 2^10
+ * remains. Comfortable, then, but a long way from unlimited — which is why this
+ * is a computed guard rather than a comment.
  */
 export function assertExactArithmetic(p: PirParams): void {
   const worst = p.n * Math.ceil(p.q / 2) * (p.t - 1);

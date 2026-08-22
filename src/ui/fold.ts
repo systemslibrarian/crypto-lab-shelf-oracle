@@ -1,4 +1,4 @@
-import { append, card, clear, disclose, el, kv, nextFrame, verdict } from './dom';
+import { append, card, clear, disclose, el, kv, nextFrame, panelStatus, verdict, withFocusRestored } from './dom';
 import type { Lab } from './state';
 import {
   beginAnswer,
@@ -66,7 +66,11 @@ const state: PanelState = {
  * silently snapping back to step 0.
  */
 export function resetFold(reason?: string): void {
-  if (state.answer && state.answer.folded > 0) state.retired = reason ?? null;
+  // Cleared here too: `advance` returns early while `busy`, so a throw during a
+  // fold would otherwise leave every control dead with no reachable way out.
+  state.busy = false;
+  // `|| state.retired` so a second change updates the reason, not just the first.
+  if ((state.answer && state.answer.folded > 0) || state.retired) state.retired = reason ?? null;
   state.query = null;
   state.answer = null;
   state.history = [];
@@ -140,7 +144,7 @@ export function renderFold(root: HTMLElement, lab: Lab): void {
         : null,
       el(
         'p',
-        { class: 'status-line', role: 'status', 'aria-live': 'polite', 'data-role': 'progress' },
+        { class: 'status-line', 'data-role': 'progress' },
         `Records folded: ${answer.folded} of ${s.shelfSize}. ` +
           (answer.folded === 0
             ? 'The accumulator is empty.'
@@ -151,21 +155,27 @@ export function renderFold(root: HTMLElement, lab: Lab): void {
       el(
         'div',
         { class: 'ct-grid', role: 'list', 'aria-label': 'Records folded into the answer so far' },
-        s.entries.map((entry, i) =>
+        s.entries.map((_entry, i) =>
           el(
             'div',
             { role: 'listitem' },
-            // NOT `aria-label` on a role-less <div>. `aria-label` is prohibited
-            // on an element with no role, and axe reports that only in its
-            // `incomplete` bucket — which is exactly why this gate asserts that
-            // bucket. The position and the state are visible text instead, so
-            // the accessible name and the rendering are the same thing.
+            // Inert BY DESIGN and dressed to look it. These tiles report the
+            // server's progress; there is nothing to click. `.ct-tile-static`
+            // drops the pointer cursor and the hover repaint that the
+            // interactive tiles on the Server's View carry, so a reader is not
+            // invited to press something that does nothing.
+            //
+            // No `aria-label` either: `aria-label` is prohibited on an element
+            // with no role, and axe reports that only in its `incomplete`
+            // bucket, which is exactly why this gate asserts that bucket. And no
+            // `title`, which would have put the book's name where only a mouse
+            // could find it. Position and state are visible text, so the
+            // accessible name and the rendering are the same thing.
             el(
               'div',
               {
-                class: 'ct-tile',
+                class: 'ct-tile ct-tile-static',
                 'data-mark': i < answer.folded ? 'folded' : undefined,
-                title: entry.title,
               },
               [
                 el('span', { class: 'ct-tile-idx' }, `#${i}`),
@@ -248,6 +258,17 @@ export function renderFold(root: HTMLElement, lab: Lab): void {
       ),
       mechanismDisclosure(),
     ])
+  );
+
+  announce(
+    root,
+    state.decoded
+      ? state.decoded.failure
+        ? `${state.decoded.failure.code}. The answer decrypted and is wrong.`
+        : `Retrieved position ${s.selectedIndex}: ${s.entries[s.selectedIndex].title}. ` +
+          `${measured.toFixed(2)} bits of noise budget left.`
+      : `${answer.folded} of ${s.shelfSize} records folded in. ` +
+        `${measured.toFixed(2)} bits of noise budget remaining.`
   );
 
   bind(root, lab);
@@ -337,7 +358,7 @@ function finalOutput(lab: Lab): HTMLElement {
   const s = lab.snapshot();
   const decoded = state.decoded;
   if (!decoded) {
-    return el('p', { class: 'status-line', role: 'status', 'aria-live': 'polite' }, 'Decoding…');
+    return el('p', { class: 'status-line' }, 'Decoding…');
   }
   const entry = s.entries[s.selectedIndex];
   return el('div', { 'data-role': 'final' }, [
@@ -412,7 +433,7 @@ function bind(root: HTMLElement, lab: Lab): void {
   root.querySelector<HTMLButtonElement>('[data-role="reset"]')?.addEventListener('click', () => {
     resetFold();
     state.retired = null;
-    renderFold(root, lab);
+    redraw(root, lab);
   });
 }
 
@@ -424,25 +445,48 @@ async function advance(root: HTMLElement, lab: Lab, count: number): Promise<void
   state.busy = true;
 
   state.retired = null;
-  const target = Math.min(s.shelfSize, answer.folded + count);
-  while (answer.folded < target) {
-    foldRecord(s.params, answer, s.plaintexts[answer.folded], query.ciphertexts[answer.folded]);
+  let current: Ciphertext;
+  let expected: Int32Array;
+  try {
+    const target = Math.min(s.shelfSize, answer.folded + count);
+    while (answer.folded < target) {
+      foldRecord(s.params, answer, s.plaintexts[answer.folded], query.ciphertexts[answer.folded]);
+    }
+    current = finishAnswer(s.params, answer);
+    expected = partialMessage(s.params, s.plaintexts, query.plainSelection, answer.folded);
+    state.history.push(noiseBudgetBits(s.params, s.sk, current, expected));
+    if (state.history.length > 6) state.history.splice(0, state.history.length - 6);
+    if (answer.folded === s.shelfSize) state.finished = true;
+  } finally {
+    // Always, even on a throw: `advance` refuses to run while `busy`, so leaving
+    // it set would kill every control in the panel with no way back.
+    state.busy = false;
   }
 
-  const current = finishAnswer(s.params, answer);
-  const expected = partialMessage(s.params, s.plaintexts, query.plainSelection, answer.folded);
-  state.history.push(noiseBudgetBits(s.params, s.sk, current, expected));
-  if (state.history.length > 6) state.history.splice(0, state.history.length - 6);
-
-  if (answer.folded === s.shelfSize) {
-    state.finished = true;
-    state.busy = false;
-    renderFold(root, lab);
+  if (state.finished) {
+    redraw(root, lab);
     await nextFrame();
     state.decoded = await decodeAnswer(s.params, s.sk, current, s.recordBytes, expected);
-    renderFold(root, lab);
-    return;
   }
-  state.busy = false;
-  renderFold(root, lab);
+  redraw(root, lab);
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
+}
+
+/**
+ * Re-render from an event handler WITHOUT throwing the keyboard reader away.
+ *
+ * A panel rebuilds its whole subtree, which destroys the control the reader is
+ * standing on. `main.ts` wraps the renders IT drives; these are the ones the
+ * panel drives itself — pressing a button, opening a disclosure, running a
+ * measurement — and they are the majority.
+ */
+function redraw(root: HTMLElement, lab: Lab): void {
+  withFocusRestored(root, () => renderFold(root, lab));
 }

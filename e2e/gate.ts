@@ -216,9 +216,21 @@ export async function assertSingleBanner(page: Page): Promise<void> {
  * element-creation helper, so ask the DOM rather than grepping the source.
  */
 export async function assertListSemantics(page: Page): Promise<void> {
-  const broken = await page.$$eval('ul[role], ol[role]', (els) =>
+  // TWO selectors, because the two rules have different scopes and an earlier
+  // form of this checked only the first while its own documentation described
+  // the second. `ul[role], ol[role]` cannot match a `<div role="list">`, which is
+  // what all three tile grids on this page are.
+  const broken = await page.$$eval('ul[role], ol[role], [role="list"]', (els) =>
     els
-      .filter((e) => e.getAttribute('role') !== 'list' || e.children.length === 0)
+      .filter((e) => {
+        const role = e.getAttribute('role');
+        const isNativeList = e.tagName === 'UL' || e.tagName === 'OL';
+        // An explicit non-list role on a <ul>/<ol> orphans every <li> under it.
+        if (isNativeList && role !== 'list') return true;
+        // Any role="list" with no children fails axe's aria-required-children
+        // the day its contents render empty.
+        return role === 'list' && e.children.length === 0;
+      })
       .map(
         (e) =>
           `${e.tagName.toLowerCase()}[role=${e.getAttribute('role')}] with ${e.children.length} children`

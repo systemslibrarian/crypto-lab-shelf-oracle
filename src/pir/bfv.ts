@@ -219,8 +219,10 @@ export function maxBudgetBits(p: PirParams): number {
  *
  * Each of the N plaintext-by-ciphertext products contributes an error term
  * p_i * e_i whose coefficients are sums of `coeffsUsed` independent products of
- * a plaintext coefficient (mean square (t-1)(2t-1)/6 over a uniform nibble) by
- * an error sample (variance eta/2). Treating those as independent gives a
+ * a plaintext coefficient by an error sample. A plaintext coefficient is a
+ * nibble, uniform on {0 .. 15}: its mean square is (1/16) * sum of k^2 =
+ * (m-1)(2m-1)/6 with m = 16, i.e. 77.5 — note m is the NUMBER OF VALUES, not t.
+ * An error sample has variance eta/2. Treating those as independent gives a
  * standard deviation that grows as sqrt(N * coeffsUsed), which is the sqrt(N)
  * the page plots against the measured value.
  *

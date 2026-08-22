@@ -224,18 +224,25 @@ test.describe('the failure paths fire, and the page names the actual cause', () 
     const bad = (await page.locator('#panel-noise [data-role="out"] .code').innerText()).trim();
     expect(bad).not.toBe(truth);
 
-    // And the page names the cause it actually detected, not a generic message:
-    // the tag is reported broken and the out-of-range count is nonzero.
+    // And the page names the cause it actually detected, not a generic message.
     const verdictText = await page.locator('#panel-noise [data-role="out"] .verdict-fail').innerText();
     expect(verdictText).toMatch(/integrity tag broken/);
+    await expect(
+      page.locator('#panel-noise dt', { hasText: 'Integrity tag' }).locator('xpath=following-sibling::dd[1]')
+    ).toHaveText('does not match');
+
+    // The out-of-range count is asserted to be a NUMBER, not to be positive —
+    // and that is the point. Just past the ceiling the failure is subtle: most
+    // coefficients still decode correctly and the few that drift land on other
+    // legal nibbles, so this count is often ZERO while the record is already
+    // wrong. It is a weaker detector than the tag, and a test that demanded it
+    // fire would be asserting a coincidence.
     const outOfRange = await page
       .locator('#panel-noise dt', { hasText: 'Coefficients out of range' })
       .locator('xpath=following-sibling::dd[1]')
       .innerText();
-    expect(Number(outOfRange.split(' ')[0])).toBeGreaterThan(0);
-    await expect(
-      page.locator('#panel-noise dt', { hasText: 'Integrity tag' }).locator('xpath=following-sibling::dd[1]')
-    ).toHaveText('does not match');
+    expect(Number.isFinite(Number(outOfRange.split(' ')[0]))).toBe(true);
+    expect(Number(outOfRange.split(' ')[0])).toBeGreaterThanOrEqual(0);
   });
 
   test('DIM_MISMATCH names both lengths, and they match the shelf on screen', async ({ page }) => {
@@ -577,5 +584,135 @@ test.describe('the page is what it says it is', () => {
     // And the heads must not all be identical to each other, which would mean
     // the encryption stopped randomising rather than that the seed worked.
     expect(new Set(first).size).toBe(first.length);
+  });
+});
+
+test.describe('the page does not fight the reader', () => {
+  test('activating a control keeps focus on it across the re-render', async ({ page }) => {
+    // Every panel rebuilds its whole subtree on interaction, which destroys the
+    // element the reader was standing on. Without focus restoration, pressing
+    // Enter on a shelf item dropped focus to <body> and a keyboard reader had to
+    // tab back through the entire document to reach the next book.
+    await boot(page);
+    const item = page.locator('#panel-shelf .shelf-item').nth(11);
+    await item.focus();
+    await page.keyboard.press('Enter');
+    await expect(item).toHaveAttribute('aria-pressed', 'true');
+    await expect(item).toBeFocused();
+
+    await openTab(page, /Homomorphic Selection/, '#panel-fold');
+    const fold = page.getByRole('button', { name: 'Fold one record' });
+    await fold.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#panel-fold [data-role="progress"]')).toContainText('1 of 64');
+    await expect(fold).toBeFocused();
+  });
+
+  test('the live region is ONE node that survives every render', async ({ page }) => {
+    // A role="status" built fresh on each render, with its text already inside
+    // it, announces nothing: a screen reader reports changes to a region that was
+    // already there. This asserts the node identity, not just its presence.
+    await boot(page);
+    const region = page.locator('#panel-shelf .live-status');
+    await expect(region).toHaveCount(1);
+    await page.evaluate(() => {
+      const el = document.querySelector('#panel-shelf .live-status') as HTMLElement;
+      el.dataset.witness = 'original';
+    });
+    const before = await region.innerText();
+
+    await page.locator('#panel-shelf .shelf-item').nth(30).click();
+    await expect(region).toHaveAttribute('data-witness', 'original');
+    expect(await region.innerText()).not.toBe(before);
+    expect(await region.innerText()).toContain('Position 30');
+
+    // And exactly one per panel, never nested inside another live region.
+    await openTab(page, /What It Does Not Hide/, '#panel-scope');
+    await expect(page.locator('#panel-scope .live-status')).toHaveCount(1);
+    expect(
+      await page.evaluate(
+        () => document.querySelectorAll('[role="status"] [role="status"]').length
+      )
+    ).toBe(0);
+  });
+
+  test('a demonstration failure code does not overwrite a real retrieval verdict', async ({
+    page,
+  }) => {
+    // The two used one field, so pressing a Trip button replaced the retrieval
+    // result at the top of the panel with a red failure retrieval never produced.
+    await boot(page);
+    await openTab(page, /Noise Exhaustion/, '#panel-noise');
+    await page.getByRole('button', { name: 'Retrieve at these settings' }).click();
+    await expect(page.locator('#panel-noise [data-role="out"] .verdict-pass')).toContainText(
+      'Retrieved position'
+    );
+
+    await page.getByRole('button', { name: 'Trip DIM_MISMATCH' }).click();
+    await expect(page.locator('#panel-noise [data-role="trip-out"] .fail-code')).toHaveText(
+      'DIM_MISMATCH'
+    );
+    // The retrieval verdict is still there and still says what it said.
+    await expect(page.locator('#panel-noise [data-role="out"] .verdict-pass')).toContainText(
+      'Retrieved position'
+    );
+    await expect(page.locator('#panel-noise [data-role="out"] .fail-code')).toHaveCount(0);
+  });
+
+  test('a second parameter change updates the retirement reason, not just the first', async ({
+    page,
+  }) => {
+    // The reason was latched on the first retirement, so after a second change the
+    // panel named the wrong cause — worse than naming none.
+    await boot(page);
+    await openTab(page, /One Server vs Two/, '#panel-versus');
+    await page.getByRole('button', { name: 'Run both' }).click();
+    await expect(page.locator('#panel-versus table.data')).toBeVisible();
+
+    await openTab(page, /The Shelf/, '#panel-shelf');
+    await page.selectOption('#shelf-record-size', '256');
+    await openTab(page, /One Server vs Two/, '#panel-versus');
+    await expect(page.locator('#panel-versus [data-role="out"]')).toContainText(
+      'the record size changed to 256 bytes'
+    );
+
+    await openTab(page, /The Shelf/, '#panel-shelf');
+    await page.selectOption('#shelf-size', '32');
+    await openTab(page, /One Server vs Two/, '#panel-versus');
+    await expect(page.locator('#panel-versus [data-role="out"]')).toContainText(
+      'the shelf length changed to 32 records'
+    );
+    await expect(page.locator('#panel-versus [data-role="out"]')).not.toContainText(
+      'the record size changed'
+    );
+  });
+
+  test('the fold panel\'s progress tiles are inert and dressed as inert', async ({ page }) => {
+    // They report the server's progress; there is nothing to click. A pointer
+    // cursor and a hover repaint would promise otherwise.
+    await boot(page);
+    await openTab(page, /Homomorphic Selection/, '#panel-fold');
+    const tiles = page.locator('#panel-fold .ct-tile');
+    await expect(tiles).toHaveCount(64);
+    expect(
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll('#panel-fold .ct-tile')).filter(
+          (el) =>
+            getComputedStyle(el).cursor === 'pointer' ||
+            el.tagName === 'BUTTON' ||
+            el.hasAttribute('tabindex') ||
+            el.hasAttribute('title')
+        ).length
+      )
+    ).toBe(0);
+    // The interactive tiles on the other panel DO look interactive, so the check
+    // above is not simply matching nothing.
+    await openTab(page, /The Server's View/, '#panel-server');
+    expect(
+      await page.evaluate(
+        () =>
+          getComputedStyle(document.querySelector('#panel-server .ct-tile') as Element).cursor
+      )
+    ).toBe('pointer');
   });
 });

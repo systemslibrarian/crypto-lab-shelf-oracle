@@ -1,4 +1,16 @@
-import { append, card, clear, disclose, el, formatBytes, kv, nextFrame, verdict } from './dom';
+import {
+  append,
+  card,
+  clear,
+  disclose,
+  el,
+  formatBytes,
+  kv,
+  nextFrame,
+  panelStatus,
+  withFocusRestored,
+  verdict,
+} from './dom';
 import type { Lab } from './state';
 import { buildQuery, distinguishIndex, type PirQuery, type QueryRandomness } from '../pir/pir';
 import { ciphertextBytes, serializeCiphertext, serializeQuery } from '../pir/serialize';
@@ -159,25 +171,56 @@ export function renderServerView(root: HTMLElement, lab: Lab): void {
       el('div', { class: 'controls' }, [
         el(
           'button',
-          { class: 'btn btn-primary', type: 'button', 'data-role': 'run-trials' },
-          `Run ${TRIALS} trials against both`
+          {
+            class: 'btn btn-primary',
+            type: 'button',
+            'data-role': 'run-trials',
+            disabled: state.running,
+          },
+          state.running ? 'Running…' : `Run ${TRIALS} trials against both`
         ),
         el(
           'button',
-          { class: 'btn', type: 'button', 'data-role': 'new-query' },
+          {
+            class: 'btn',
+            type: 'button',
+            'data-role': 'new-query',
+            disabled: state.running,
+          },
           'New query, same book'
         ),
       ]),
       el(
         'div',
-        { 'data-role': 'trial-out', role: 'status', 'aria-live': 'polite' },
+        { 'data-role': 'trial-out' },
         trialOutput()
       ),
       whyDisclosure(),
     ])
   );
 
+  announce(root, serverHeadline(s.shelfSize, query));
+
   bind(root, lab);
+}
+
+/** The one sentence the panel's live region carries. */
+function serverHeadline(shelfSize: number, query: PirQuery): string {
+  if (state.running) return 'Running the distinguishing trials.';
+  if (state.trialResult) {
+    const { fresh, reused, trials } = state.trialResult;
+    return (
+      `Distinguisher over ${trials} trials: ${fresh} correct with fresh randomness, ` +
+      `${reused} correct with the randomness reused.`
+    );
+  }
+  if (state.guess !== null) {
+    const right = query.plainSelection[state.guess] === 1;
+    return right
+      ? `You guessed ${state.guess} and that was the one — a one-in-${shelfSize} guess.`
+      : `You guessed ${state.guess}; the 1 was elsewhere.`;
+  }
+  return `${shelfSize} ciphertexts on screen. Pick the one you think encrypts the 1.`;
 }
 
 function markFor(index: number, query: PirQuery, guess: number | null): string | undefined {
@@ -187,7 +230,7 @@ function markFor(index: number, query: PirQuery, guess: number | null): string |
 
 function guessVerdict(query: PirQuery): HTMLElement {
   if (state.guess === null) {
-    return verdict('info', 'Pick a tile. Which one encrypts the 1?', { live: true });
+    return verdict('info', 'Pick a tile. Which one encrypts the 1?');
   }
   const right = query.plainSelection[state.guess] === 1;
   const truth = Array.from(query.plainSelection).findIndex((b) => b === 1);
@@ -204,8 +247,7 @@ function guessVerdict(query: PirQuery): HTMLElement {
           el('strong', {}, `You guessed ${state.guess}. The 1 was at ${truth}. `),
           `Nothing in the bytes told you, because nothing in the bytes can: under RLWE, Enc(0) and ` +
             `Enc(1) are indistinguishable without the secret key.`,
-        ],
-    { live: true }
+        ]
   );
 }
 
@@ -281,7 +323,7 @@ function bind(root: HTMLElement, lab: Lab): void {
   root.querySelectorAll<HTMLButtonElement>('.ct-tile').forEach((tile) => {
     tile.addEventListener('click', () => {
       state.guess = Number(tile.dataset.index);
-      renderServerView(root, lab);
+      redraw(root, lab);
     });
   });
 
@@ -290,12 +332,12 @@ function bind(root: HTMLElement, lab: Lab): void {
     state.randomness = reuse.checked ? 'reused' : 'fresh';
     state.query = null;
     state.trialResult = null;
-    renderServerView(root, lab);
+    redraw(root, lab);
   });
 
   root.querySelector<HTMLButtonElement>('[data-role="new-query"]')?.addEventListener('click', () => {
     state.query = null;
-    renderServerView(root, lab);
+    redraw(root, lab);
   });
 
   root.querySelector<HTMLButtonElement>('[data-role="run-trials"]')?.addEventListener('click', () => {
@@ -314,10 +356,15 @@ async function runTrials(root: HTMLElement, lab: Lab): Promise<void> {
   if (state.running) return;
   state.running = true;
   state.retired = null;
-  renderServerView(root, lab);
+  redraw(root, lab);
   await nextFrame();
 
   const s = lab.snapshot();
+  // The parameters as they were when the experiment started. It yields ten times
+  // across 1,280 encryptions, which is seconds of wall clock — long enough for a
+  // reader to change the modulus underneath it. If that happens the result is
+  // meaningless and gets dropped rather than drawn beside the new parameters.
+  const startedAt = lab.parameterVersion;
   let fresh = 0;
   let reused = 0;
   for (let trial = 0; trial < TRIALS; trial += 1) {
@@ -329,11 +376,18 @@ async function runTrials(root: HTMLElement, lab: Lab): Promise<void> {
     });
     if (distinguishIndex(s.params, reusedQuery.ciphertexts) === index) reused += 1;
     if (trial % 4 === 3) await nextFrame();
+    if (lab.parameterVersion !== startedAt) {
+      state.running = false;
+      state.trialResult = null;
+      state.retired = 'the parameters changed while the trials were running';
+      redraw(root, lab);
+      return;
+    }
   }
 
   state.trialResult = { fresh, reused, trials: TRIALS };
   state.running = false;
-  renderServerView(root, lab);
+  redraw(root, lab);
 }
 
 /**
@@ -344,8 +398,29 @@ async function runTrials(root: HTMLElement, lab: Lab): Promise<void> {
  * a parameter change, and neither should vanish without saying so.
  */
 export function resetServerView(reason?: string): void {
-  if (state.trialResult) state.retired = reason ?? null;
+  // `|| state.retired` so a second change updates the reason, not just the first.
+  if (state.trialResult || state.retired) state.retired = reason ?? null;
   state.query = null;
   state.guess = null;
   state.trialResult = null;
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
+}
+
+/**
+ * Re-render from an event handler WITHOUT throwing the keyboard reader away.
+ *
+ * A panel rebuilds its whole subtree, which destroys the control the reader is
+ * standing on. `main.ts` wraps the renders IT drives; these are the ones the
+ * panel drives itself — pressing a button, opening a disclosure, running a
+ * measurement — and they are the majority.
+ */
+function redraw(root: HTMLElement, lab: Lab): void {
+  withFocusRestored(root, () => renderServerView(root, lab));
 }

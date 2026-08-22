@@ -1,4 +1,17 @@
-import { append, card, clear, disclose, el, formatBytes, formatMs, nextFrame, scroller, verdict } from './dom';
+import {
+  append,
+  card,
+  clear,
+  disclose,
+  el,
+  formatBytes,
+  formatMs,
+  nextFrame,
+  panelStatus,
+  withFocusRestored,
+  scroller,
+  verdict,
+} from './dom';
 import type { Lab } from './state';
 import { buildQuery, decodeAnswer, serverAnswer } from '../pir/pir';
 import { serializeCiphertext, serializeQuery } from '../pir/serialize';
@@ -59,7 +72,9 @@ const state: PanelState = {
  * from one that was never run — so the reason is kept and printed.
  */
 export function resetVersus(reason?: string): void {
-  if (state.lattice || state.xor) state.retired = reason ?? null;
+  // `|| state.retired` so a SECOND parameter change updates the reason rather
+  // than leaving the first one's wording beside the second one's cause.
+  if (state.lattice || state.xor || state.retired) state.retired = reason ?? null;
   state.lattice = null;
   state.xor = null;
   state.colluded = null;
@@ -97,13 +112,31 @@ export function renderVersus(root: HTMLElement, lab: Lab): void {
           'Let the two servers compare notes'
         ),
       ]),
-      el('div', { 'data-role': 'out', role: 'status', 'aria-live': 'polite' }, output(lab)),
+      el('div', { 'data-role': 'out' }, output(lab)),
     ])
   );
 
   append(root, card('What the numbers do not say', [honestyNotes(s.shelfSize)]));
 
+  announce(root, versusHeadline(s.shelfSize));
+
   bind(root, lab);
+}
+
+function versusHeadline(shelfSize: number): string {
+  if (state.running) return 'Running both protocols and timing them.';
+  if (state.colluded !== null) {
+    return `The two servers compared masks and recovered shelf position ${state.colluded}.`;
+  }
+  if (state.lattice && state.xor) {
+    return (
+      `Both protocols retrieved the record over ${shelfSize} positions. ` +
+      `Single-server upload ${formatBytes(state.lattice.uploadBytes)}, ` +
+      `two-server upload ${formatBytes(state.xor.uploadBytes)}.`
+    );
+  }
+  if (state.retired) return `Measurements retired: ${state.retired}.`;
+  return 'Nothing measured yet.';
 }
 
 function output(lab: Lab): HTMLElement {
@@ -186,9 +219,10 @@ function output(lab: Lab): HTMLElement {
     el(
       'p',
       { class: 'inline-note' },
-      `Each row marks the better cell where "better" is unambiguous. Two servers win almost ` +
-        `every row — cheaper, faster, exact, and unconditionally private. The single row they ` +
-        `lose is the second one, and it is the reason single-server PIR exists at all.`
+      `Each row marks the better cell where "better" is unambiguous. Two servers win every row ` +
+        `that is a cost — cheaper, faster, exact. They lose exactly two, and the two are the ` +
+        `same fact said twice: this scheme needs one server, so there is no non-collusion ` +
+        `assumption to make. That is what the whole noise budget is buying.`
     ),
     collusionOutput(),
   ]);
@@ -298,7 +332,7 @@ function bind(root: HTMLElement, lab: Lab): void {
   root.querySelector<HTMLButtonElement>('[data-role="collude"]')?.addEventListener('click', () => {
     if (!state.xor) return;
     state.colluded = colludeRecoverIndex(state.xor.query);
-    renderVersus(root, lab);
+    redraw(root, lab);
   });
 }
 
@@ -307,7 +341,7 @@ async function run(root: HTMLElement, lab: Lab): Promise<void> {
   state.running = true;
   state.colluded = null;
   state.retired = null;
-  renderVersus(root, lab);
+  redraw(root, lab);
   await nextFrame();
 
   const s = lab.snapshot();
@@ -368,11 +402,31 @@ async function run(root: HTMLElement, lab: Lab): Promise<void> {
   };
 
   state.running = false;
-  renderVersus(root, lab);
+  redraw(root, lab);
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/**
+ * Announce the panel's headline through the ONE live region `main.ts` created
+ * before any render ran. `root` is the panel body; the region is its sibling.
+ */
+function announce(root: HTMLElement, text: string): void {
+  if (root.parentElement) panelStatus(root.parentElement, text);
+}
+
+/**
+ * Re-render from an event handler WITHOUT throwing the keyboard reader away.
+ *
+ * A panel rebuilds its whole subtree, which destroys the control the reader is
+ * standing on. `main.ts` wraps the renders IT drives; these are the ones the
+ * panel drives itself — pressing a button, opening a disclosure, running a
+ * measurement — and they are the majority.
+ */
+function redraw(root: HTMLElement, lab: Lab): void {
+  withFocusRestored(root, () => renderVersus(root, lab));
 }

@@ -1,4 +1,5 @@
 import './style.css';
+import { el, withFocusRestored } from './ui/dom';
 import { Lab } from './ui/state';
 import { renderShelf } from './ui/shelf';
 import { renderServerView, resetServerView } from './ui/serverview';
@@ -49,14 +50,37 @@ async function boot(): Promise<void> {
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.tab-btn'));
   const mounted = new Set<PanelId>();
 
+  const stale = new Set<PanelId>();
+
   const panelFor = (id: PanelId): HTMLElement => {
     const node = document.getElementById(`panel-${id}`);
     if (!node) throw new Error(`missing panel: ${id}`);
     return node;
   };
 
-  const renderMounted = (): void => {
-    for (const id of mounted) RENDERERS[id](panelFor(id), lab);
+  /**
+   * The panel's render target, and its ONE live region.
+   *
+   * The live region is created once, before any renderer runs, and lives OUTSIDE
+   * the container that gets cleared — because a `role="status"` node that is
+   * built fresh on every render, with its text already inside it, announces
+   * nothing at all. It has to be present first and change afterwards.
+   */
+  const bodyFor = (id: PanelId): HTMLElement => {
+    const panel = panelFor(id);
+    let body = panel.querySelector<HTMLElement>('.panel-body');
+    if (!body) {
+      panel.appendChild(el('p', { class: 'live-status', role: 'status', 'aria-live': 'polite' }));
+      body = el('div', { class: 'panel-body' });
+      panel.appendChild(body);
+    }
+    return body;
+  };
+
+  const render = (id: PanelId): void => {
+    const panel = panelFor(id);
+    withFocusRestored(panel, () => RENDERERS[id](bodyFor(id), lab));
+    stale.delete(id);
   };
 
   const activate = (id: PanelId): void => {
@@ -71,7 +95,13 @@ async function boot(): Promise<void> {
     }
     if (!mounted.has(id)) {
       mounted.add(id);
-      RENDERERS[id](panelFor(id), lab);
+      render(id);
+    } else if (stale.has(id)) {
+      // Re-rendered on ARRIVAL, not on the parameter change itself. Rebuilding a
+      // hidden panel would encrypt a fresh sixty-four-ciphertext query for a
+      // reader who is looking at something else — tens of milliseconds of
+      // schoolbook polynomial arithmetic, on the main thread, for no pixels.
+      render(id);
     }
   };
 
@@ -95,7 +125,12 @@ async function boot(): Promise<void> {
 
   lab.subscribe((change) => {
     invalidateCaches(change);
-    renderMounted();
+    // Mark every mounted panel stale, but re-render only the one on screen.
+    // Rebuilding a hidden panel would encrypt a fresh sixty-four-ciphertext
+    // query for a reader who is looking at something else.
+    for (const id of mounted) stale.add(id);
+    const open = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
+    if (open) render(open.dataset.panel as PanelId);
   });
 
   activate('shelf');

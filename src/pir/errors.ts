@@ -1,12 +1,26 @@
 /**
- * The four failure codes this lab can raise, and the fail-closed error that
- * carries them.
+ * The four failure codes this lab can raise.
  *
- * Every one of them is reachable from the page by doing something a real client
- * or server could do, and every one of them stops the protocol rather than
- * returning a value that looks plausible. That is the whole point of naming
- * them: a PIR answer that is quietly wrong is indistinguishable from a PIR
- * answer that is quietly right, because the client cannot see the database.
+ * Every one is reachable from the page by doing something a real client or
+ * server could do. They divide into REFUSALS and REPORTS, and the difference is
+ * not cosmetic — it is whether stopping is even possible.
+ *
+ * REFUSALS throw `PirError` and no answer is produced: `DIM_MISMATCH`,
+ * `INDEX_OUT_OF_RANGE`, and `PARAM_UNSAFE` when it fires from the exact-integer
+ * guard in `assertExactArithmetic`. Each of those is a condition the code can
+ * detect before it computes anything wrong.
+ *
+ * REPORTS are returned rather than thrown, because there is nothing to stop.
+ * `NOISE_BUDGET_EXHAUSTED` is the important one: the ciphertext decrypts
+ * perfectly well and simply yields the wrong bytes, so all anyone can do is
+ * measure it and say so. `PARAM_UNSAFE` also reports rather than refuses when it
+ * comes from the security table — the parameters still compute correct answers,
+ * they just leave the published estimate behind, and refusing would delete the
+ * exhibit that shows what leaving it buys.
+ *
+ * Naming them is the whole point either way: a PIR answer that is quietly wrong
+ * is indistinguishable from one that is quietly right, because the client cannot
+ * see the database.
  */
 export type FailureCode =
   /** The accumulated RLWE noise passed the decryption ceiling. The returned
