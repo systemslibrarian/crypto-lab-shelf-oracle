@@ -2,6 +2,16 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Dark is the only theme. Pin it before first paint, and overwrite any
+      // 'light' a visitor stored back when the header carried a theme toggle.
+      (function () {
+        try {
+          localStorage.setItem('theme', 'dark');
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', 'dark');
+      })();
+    </script>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -15,16 +25,6 @@
     <meta name="author" content="systemslibrarian" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0b0e16" />
-    <script>
-      // Dark is the only theme. Pin it before first paint, and overwrite any
-      // 'light' a visitor stored back when the header carried a theme toggle.
-      (function () {
-        try {
-          localStorage.setItem('theme', 'dark');
-        } catch (e) {}
-        document.documentElement.setAttribute('data-theme', 'dark');
-      })();
-    </script>
     <title>Shelf Oracle — crypto-lab</title>
   </head>
   <body>

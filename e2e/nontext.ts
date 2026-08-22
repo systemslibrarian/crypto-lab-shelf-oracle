@@ -12,8 +12,8 @@ import type { Page } from '@playwright/test';
  * IN THIS LAB the control-boundary half is the live one. `src/style.css` has
  * the boundary token — `--control-border`, measured at 3.86:1 against
  * `--surface` and 4.17:1 against `--bg`, and applied to every `.btn`,
- * `.tab-btn`, `.shelf-item`, `.ct-tile`, `.pill`, `.check-opt`, the `.meter`
- * track and both `<select>` and text `<input>` — but tokens are discarded by
+ * `.tab-btn`, `.shelf-item`, `.ct-tile`, `.pill`, the `.meter` track and both
+ * `<select>` and text `<input>` — but tokens are discarded by
  * overrides, and that is what this oracle exists to measure rather than trust.
  * Several shapes on this page override or bypass it: `.btn-primary` and the
  * selected `.tab-btn` and `.shelf-item` repaint their border the SAME colour
