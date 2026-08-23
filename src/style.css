@@ -714,7 +714,11 @@ table.data caption {
 
 .kv {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  /* Both tracks need an explicit 0 floor. A bare `max-content` track cannot
+     shrink below the widest `dt` at all, and a bare `1fr` track takes its
+     automatic minimum from the `dd`'s min-content — together they held the
+     document at a 300px floor, 20px from the 320px reflow threshold. */
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   gap: 0.25rem 0.9rem;
   font-size: 0.85rem;
   margin: 0;
