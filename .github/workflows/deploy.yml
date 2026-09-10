@@ -119,13 +119,11 @@ jobs:
             sleep 15
           done
           [ -n "$merged" ] || { echo "::warning::gate passed, merge did not land"; exit 0; }
-          # A merge performed with secrets.GITHUB_TOKEN raises NO push event --
-          # GitHub suppresses them so workflows cannot retrigger themselves -- so
-          # deploy would never run and the live site would keep serving the
-          # previous build with no red run anywhere to say so. Ask for it
-          # explicitly; a workflow_dispatch through the API is not suppressed,
-          # and the dispatched run is the same gate-then-deploy pipeline, so a
-          # bad merge still ships nothing.
+          # A merge made with GITHUB_TOKEN raises no push event -- GitHub suppresses
+          # them so workflows cannot retrigger themselves -- so deploy would never run
+          # and the site would keep serving the previous build. Ask for it explicitly;
+          # a workflow_dispatch through the API is not suppressed. The dispatched run
+          # is the same gate-then-deploy pipeline, so a bad merge still ships nothing.
           gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
