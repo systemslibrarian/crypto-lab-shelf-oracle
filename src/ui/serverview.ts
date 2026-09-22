@@ -103,6 +103,7 @@ export function renderServerView(root: HTMLElement, lab: Lab): void {
             el(
               'button',
               {
+                id: `ct-tile-${i}`,
                 class: 'ct-tile',
                 type: 'button',
                 'data-index': i,

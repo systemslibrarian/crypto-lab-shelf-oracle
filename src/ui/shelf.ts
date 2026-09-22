@@ -40,6 +40,7 @@ export function renderShelf(root: HTMLElement, lab: Lab): void {
             el(
               'button',
               {
+                id: `shelf-item-${index}`,
                 class: 'shelf-item',
                 type: 'button',
                 'aria-pressed': index === s.selectedIndex ? 'true' : 'false',
