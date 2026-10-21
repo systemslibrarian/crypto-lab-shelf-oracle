@@ -133,6 +133,15 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
             `browser memory. Nothing has been audited. Both "servers" are objects in this page.`,
         ]
       ),
+      el('div', { id: 'decryption-feedback-research', class: 'callout callout-caveat' }, [
+        el('strong', {}, 'Research update — 20 October 2026: decryption feedback'),
+        el('p', {}, 'Ordinary encryption security (IND-CPA), correct decryption, and security when an adversary learns computation results (IND-CPA-D) are different guarantees. Choe, Kang and Stehlé report attacks on particular BFV/BGV configurations using heuristic correctness assumptions, with experiments in OpenFHE and HElib. Crafted operations can exceed heuristic noise bounds; two attacks recover keys, while a third breaks indistinguishability. Parameter tables and noise estimates alone do not establish security in this feedback model. This browser lab does not reproduce those attacks or establish that its implementation is vulnerable.'),
+        el('p', {}, 'This PIR model assumes an honest-but-curious server. Both parties run locally; the displayed noise measurements and failure verdicts are teaching diagnostics, not messages to a remote server. A real deployment must analyze any disclosure of decrypted results or errors to an adversary.'),
+        el('p', {}, [
+          el('a', { href: 'https://eprint.iacr.org/2026/2546' }, 'New IND-CPA-D Attacks on BFV and BGV'),
+          ' — received 19 October; revised 20 October 2026; accepted to ACM CCS 2026. Demonstrated results under specific attack-model conditions.',
+        ]),
+      ]),
       disclose('The construction, and where it comes from', [
         el(
           'p',
@@ -438,3 +447,4 @@ function announce(root: HTMLElement, text: string): void {
 function redraw(root: HTMLElement, lab: Lab): void {
   withFocusRestored(root, () => renderScope(root, lab));
 }
+
