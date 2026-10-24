@@ -1015,9 +1015,12 @@ export async function driveAllStates(page: Page, label: string): Promise<void> {
   await scanAt('Stateful PIR: invalid epoch sends fixed-shape cover and returns no record');
 
   await page.locator('#panel-stateful [data-role="stateful-recover-update"]').click();
-  await expect(page.locator('#panel-stateful [data-role="stateful-update-evidence"]')).toContainText(
-    'Recovered current bytes after full rebuild yes'
-  );
+  await expect(
+    page
+      .locator('#panel-stateful [data-role="stateful-update-evidence"] dt')
+      .filter({ hasText: /^Recovered current bytes after full rebuild$/ })
+      .locator('xpath=following-sibling::dd[1]')
+  ).toHaveText('yes', { timeout: 30_000 });
   await expect(page.locator('#panel-stateful [data-role="stateful-local-route"]')).toContainText(
     'retrieve'
   );

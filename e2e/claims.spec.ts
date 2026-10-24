@@ -362,11 +362,23 @@ test.describe('compressed-query expansion is executed and costed from this imple
 });
 
 test.describe('stateful preprocessing PIR executes the claims it prints', () => {
-  const valueAfter = async (page: Page, panel: string, label: string): Promise<string> =>
+  const exactText = (value: string): RegExp =>
+    new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+
+  const valueLocator = (page: Page, panel: string, label: string) =>
     page
-      .locator(`${panel} dt`, { hasText: label })
-      .locator('xpath=following-sibling::dd[1]')
-      .innerText();
+      .locator(`${panel} dt`)
+      .filter({ hasText: exactText(label) })
+      .locator('xpath=following-sibling::dd[1]');
+
+  const valueAfter = async (page: Page, panel: string, label: string): Promise<string> =>
+    valueLocator(page, panel, label).innerText();
+
+  const tableValueLocator = (page: Page, table: string, label: string) =>
+    page
+      .locator(`${table} th`)
+      .filter({ hasText: exactText(label) })
+      .locator('xpath=following-sibling::td[1]');
 
   const headBytes = (text: string): number[] =>
     [...text.matchAll(/\b[0-9a-f]{2}\b/g)].map((match) => Number.parseInt(match[0], 16));
@@ -391,11 +403,19 @@ test.describe('stateful preprocessing PIR executes the claims it prints', () => 
       expect(Math.floor(index / 8)).toBe(chunk);
     });
     await expect(
-      page.locator('#panel-stateful [data-role="stateful-server-transcript"]')
-    ).toContainText('Canonical query 8 B');
+      tableValueLocator(
+        page,
+        '#panel-stateful [data-role="stateful-server-transcript"]',
+        'Canonical query'
+      )
+    ).toHaveText('8 B');
     await expect(
-      page.locator('#panel-stateful [data-role="stateful-server-transcript"]')
-    ).toContainText('Response 512 B');
+      tableValueLocator(
+        page,
+        '#panel-stateful [data-role="stateful-server-transcript"]',
+        'Response'
+      )
+    ).toHaveText('512 B');
 
     const recovery = headBytes(
       await page.locator('#panel-stateful [data-role="stateful-recovery-equation"]').innerText()
@@ -462,16 +482,22 @@ test.describe('stateful preprocessing PIR executes the claims it prints', () => 
     await expect(evidence).toContainText(
       'This is not an ordinary application query and is not evidence for the independent-target privacy or availability claim',
     );
-    for (const claim of [
-      'Old record was retained as a replacement yes',
-      'New record actually differs yes',
-      'Old record still has a valid public tag yes',
-      'New record has a valid public tag yes',
-      'Stale recovery matches current diagnostic record no',
-      'Stale recovery public tag matches no',
-      'Snapshot digest detected the known update yes',
+    for (const [label, value] of [
+      ['Old record was retained as a replacement', 'yes'],
+      ['New record actually differs', 'yes'],
+      ['Old record still has a valid public tag', 'yes'],
+      ['New record has a valid public tag', 'yes'],
+      ['Stale recovery matches current diagnostic record', 'no'],
+      ['Stale recovery public tag matches', 'no'],
+      ['Snapshot digest detected the known update', 'yes'],
     ]) {
-      await expect(evidence).toContainText(claim);
+      await expect(
+        valueLocator(
+          page,
+          '#panel-stateful [data-role="stateful-update-evidence"]',
+          label
+        )
+      ).toHaveText(value);
     }
     await expect(page.locator('#panel-stateful [data-role="stateful-equations"] .verdict-pass')).toHaveCount(2);
     await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
@@ -492,7 +518,13 @@ test.describe('stateful preprocessing PIR executes the claims it prints', () => 
     await expect(executed.locator('tr', { hasText: 'Known-update digest bytes' }).locator('td')).toContainText('32768 B');
 
     await page.locator('#panel-stateful [data-role="stateful-recover-update"]').click();
-    await expect(evidence).toContainText('Recovered current bytes after full rebuild yes');
+    await expect(
+      valueLocator(
+        page,
+        '#panel-stateful [data-role="stateful-update-evidence"]',
+        'Recovered current bytes after full rebuild'
+      )
+    ).toHaveText('yes', { timeout: 30_000 });
     await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
       'Application bytes match the current database'
     );
@@ -506,7 +538,7 @@ test.describe('stateful preprocessing PIR executes the claims it prints', () => 
     await openTab(page, /Stateful PIR/, '#panel-stateful');
 
     const bound = await page.locator('#panel-stateful [data-role="stateful-bound"]').innerText();
-    const match = /(\d+) × \(7\/8\)\^(\d+) = ([\d.e+-]+) ≈ 2\^(-?[\d.]+)/i.exec(bound);
+    const match = /(\d+) × \(7\/8\)\^(\d+) = ([\d.e+-]+) ≈ 2\^(-?\d+(?:\.\d+)?)/i.exec(bound);
     expect(match).not.toBeNull();
     const queries = Number(match?.[1]);
     const hints = Number(match?.[2]);
