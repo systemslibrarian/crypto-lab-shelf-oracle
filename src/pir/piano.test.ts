@@ -824,6 +824,22 @@ describe('state loss, update invalidation and rollback', () => {
     expect(() => deserializePianoState(missingConsumedTargets)).toThrow(
       /more refresh slots than effective targets|programmed target is not marked as consumed|does not cache every consumed/
     );
+    const unacceptedRequest = wire.slice();
+    const unacceptedView = new DataView(unacceptedRequest.buffer);
+    unacceptedView.setUint32(92, 1, true);
+    unacceptedView.setUint32(96, PIANO_RESPONSE_BYTES, true);
+    expect(() => deserializePianoState(unacceptedRequest)).toThrow(
+      /committed request without an accepted response/
+    );
+    const excessResponseBytes = wire.slice();
+    new DataView(excessResponseBytes.buffer).setUint32(
+      96,
+      3 * PIANO_RESPONSE_BYTES,
+      true
+    );
+    expect(() => deserializePianoState(excessResponseBytes)).toThrow(
+      /noncanonical response-byte total/
+    );
     expect(() => deserializePianoState(wire.subarray(0, wire.length - 1))).toThrow(/expected/);
     expect(() => deserializePianoState(Uint8Array.from([...wire, 0]))).toThrow(/expected/);
   });

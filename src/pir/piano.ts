@@ -1274,6 +1274,15 @@ export function deserializePianoState(
   if (responseBytesReceived < responsesAccepted * PIANO_RESPONSE_BYTES) {
     throw new RangeError('Piano state records fewer bytes than its accepted responses require');
   }
+  if (invalid === null && responsesAccepted !== requestsSent) {
+    throw new RangeError('valid Piano state has a committed request without an accepted response');
+  }
+  if (
+    invalid === null &&
+    responseBytesReceived !== responsesAccepted * PIANO_RESPONSE_BYTES
+  ) {
+    throw new RangeError('valid Piano state has a noncanonical response-byte total');
+  }
   if (cacheCount > PIANO_QUERY_WINDOW || cacheCount > requestsSent) {
     throw new RangeError('Piano normal cache exceeds the bounded committed query history');
   }
