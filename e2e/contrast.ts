@@ -417,7 +417,7 @@ export async function auditContrast(
     /**
      * Style and geometry are memoised per element for one pass.
      *
-     * A driven pass here walks a seven-panel document, and the expensive part is
+     * A driven pass here walks an eight-panel document, and the expensive part is
      * the tile grids: the shelf renders 64 `.shelf-item` buttons with three
      * text spans each, and both the Server's View and Homomorphic Selection
      * panels render a further 64 `.ct-tile`s apiece — nearly 400 sibling
@@ -694,7 +694,7 @@ export async function auditContrast(
      *
      * Whether it is a no-op here depends on declarations that are easy to
      * change and easy to miss, which is the argument for keeping it: this page
-     * runs seven exhibits and many screens deep, so the day a `height: 100%`
+     * runs eight exhibits and many screens deep, so the day a `height: 100%`
      * appears on `html` or `body`, everything below the first screen would
      * report against a white page that does not exist — in a lab whose default
      * dark canvas is near-black.

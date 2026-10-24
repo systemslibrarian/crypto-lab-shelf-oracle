@@ -13,7 +13,7 @@ import {
  * WCAG A/AA regression gate.
  *
  * The lab is driven along everything it teaches: the arrival state, where The
- * Shelf is active with position 0 selected and the other six tabpanels are
+ * Shelf is active with position 0 selected and the other seven tabpanels are
  * hidden and UNRENDERED; the shared skip link focused; a different book chosen;
  * the byte-to-coefficient packing table opened through its summary; a shorter
  * record and a tiled 128-position shelf; the encrypted selection vector with a
@@ -23,7 +23,9 @@ import {
  * check, then reset; the decryption identity and the why-the-sum-selects
  * derivation opened; the four-block compressed query before and after expansion,
  * with its independent checks disclosed and then its key-dependent result retired;
- * both protocols measured head to head and the two servers
+ * stateful preprocessing before setup and through retrieval, cached cover,
+ * database-update invalidation, rebuild and state loss; both original protocols
+ * measured head to head and the two servers
  * colluding to recover the index; a successful retrieval and then a genuinely
  * exhausted noise budget; PARAM_UNSAFE raised by a modulus past the standard's
  * ceiling; all four failure codes raised by the controls that cause them; the

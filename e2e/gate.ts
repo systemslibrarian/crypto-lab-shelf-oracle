@@ -38,7 +38,7 @@ export const REFLOW = { width: 280, height: 800 };
  *
  *  2. IT FORCED EVERY PANEL VISIBLE FROM SCRIPT. The old drive stripped every
  *     `[hidden]` attribute and set every `<details>.open` by JS before its only
- *     scan. Stripping `hidden` puts all seven tabpanels on screen AT ONCE — a
+ *     scan. Stripping `hidden` puts all eight tabpanels on screen AT ONCE — a
  *     rendering no reader can reach and axe then scans instead of the real one
  *     — and script-opening the disclosures means the SHUT state, which is what
  *     every reader arrives at, was never scanned at all. This gate switches
@@ -302,7 +302,7 @@ export async function boot(page: Page): Promise<void> {
   await expect(page.locator('main')).toHaveCount(1);
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.locator('h1')).toHaveText('Shelf Oracle');
-  await expect(page.locator('.tab-btn')).toHaveCount(7);
+  await expect(page.locator('.tab-btn')).toHaveCount(8);
 
   // The shared skip link points at an id that exists. axe's skip-link rule is
   // best-practice, not WCAG-tagged, so `withTags` never runs it — a skip link
@@ -321,8 +321,8 @@ export async function boot(page: Page): Promise<void> {
   ).toHaveCount(0);
   await expect(page.locator('#cl-theme-toggle')).toHaveCount(0);
 
-  // ── The arrival state: The Shelf active, six panels unrendered ──────────
-  // Every panel is rendered lazily, so the other six are hidden AND EMPTY
+  // ── The arrival state: The Shelf active, seven panels unrendered ─────────
+  // Every panel is rendered lazily, so the other seven are hidden AND EMPTY
   // until their tab is first activated — asserted, because "empty" is this
   // lab's tell that a renderer threw (see `watchPageErrors`).
   await expect(page.locator('#panel-shelf .shelf-item')).toHaveCount(64);
@@ -331,7 +331,7 @@ export async function boot(page: Page): Promise<void> {
     'aria-pressed',
     'true'
   );
-  for (const id of ['server', 'fold', 'expand', 'versus', 'noise', 'scope']) {
+  for (const id of ['server', 'fold', 'expand', 'stateful', 'versus', 'noise', 'scope']) {
     await expect(page.locator(`#panel-${id}`)).toBeHidden();
     await expect(page.locator(`#panel-${id}`)).toBeEmpty();
   }
@@ -442,7 +442,7 @@ export async function expectScrollersReachable(page: Page, label: string): Promi
  * DO remove an element from the tab order, so those are skipped rather than
  * flagged — the failure is specifically the invisible-but-tabbable pair. The
  * `hidden` tabpanels here take the `display: none` route, which is why the
- * six inactive panels' worth of controls — up to 64 tiles apiece — are
+ * seven inactive panels' worth of controls — up to 64 tiles apiece — are
  * legitimately absent from the tab order.
  *
  * Off-screen-but-focusable is the WCAG-sanctioned skip-link idiom and is
@@ -728,7 +728,7 @@ async function openTab(page: Page, name: RegExp, panelId: string): Promise<void>
  * Five things shape this drive:
  *
  *  - THE ARRIVAL STATE IS SCANNED FIRST, exactly as a reader gets it: The Shelf
- *    active with position 0 selected, six panels hidden and unrendered, the
+ *    active with position 0 selected, seven panels hidden and unrendered, the
  *    one disclosure shut. The gate this replaces force-revealed all of it
  *    before its only scan.
  *
@@ -758,7 +758,7 @@ async function openTab(page: Page, name: RegExp, panelId: string): Promise<void>
 export async function driveAllStates(page: Page, label: string): Promise<void> {
   const scanAt = (s: string): Promise<void> => scan(page, `${label} / ${s}`);
 
-  await scanAt('arrival: The Shelf active, six panels unrendered, the disclosure shut');
+  await scanAt('arrival: The Shelf active, seven panels unrendered, the disclosure shut');
 
   // ── The shared skip link, focused ───────────────────────────────────────
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
@@ -950,6 +950,96 @@ export async function driveAllStates(page: Page, label: string): Promise<void> {
     'Result retired'
   );
   await scanAt('Compressed query: result retired after the secret key changed');
+
+  // ── Stateful PIR ────────────────────────────────────────────────────────
+  await openTab(page, /Stateful PIR/, '#panel-stateful');
+  await expect(page.locator('#panel-stateful [data-role="stateful-transcript-empty"]')).toContainText(
+    'No online request is retained'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeDisabled();
+  await scanAt('Stateful PIR: no setup epoch and no server transcript');
+
+  await page.locator('#panel-stateful [data-role="stateful-setup"]').click();
+  await expect(page.locator('#panel-stateful [data-role="stateful-state-metrics"]')).toContainText(
+    'valid'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-transcript-empty"]')).toContainText(
+    'No online request is retained'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-setup"]')).toBeFocused();
+  await scanAt('Stateful PIR: live-entropy setup complete, before any online request');
+
+  await page.locator('#panel-stateful [data-role="stateful-query"]').click();
+  await expect(page.locator('#panel-stateful [data-role="stateful-server-transcript"]')).toContainText(
+    '8 B'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-server-transcript"]')).toContainText(
+    '512 B'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-local-route"]')).toContainText(
+    'retrieve'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeFocused();
+  await scanAt('Stateful PIR: one real eight-probe retrieval and consumed-hint refresh');
+
+  await page.locator('#panel-stateful [data-role="stateful-repeat"]').click();
+  await expect(page.locator('#panel-stateful [data-role="stateful-local-route"]')).toContainText(
+    'cached-cover'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
+    'Cached application record returned'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-repeat"]')).toBeFocused();
+  await scanAt('Stateful PIR: cached repeat still sends a real unused-target cover query');
+
+  await page.locator('#panel-stateful [data-role="stateful-update"]').click();
+  await expect(page.locator('#panel-stateful [data-role="stateful-update-evidence"]')).toContainText(
+    'Old record still has a valid public tag'
+  );
+  await expect(page.locator('#panel-stateful .fail-code')).toContainText('DATABASE_UPDATED');
+  await expect(
+    page.locator('#panel-stateful [data-role="stateful-recover-update"]')
+  ).toBeFocused();
+  await scanAt('Stateful PIR: non-target database update invalidates stale private state');
+
+  // Invalid local state does not silently suppress traffic: it spends the same
+  // 8-byte/512-byte shape, reports DATABASE_UPDATED and returns no record.
+  await page.locator('#panel-stateful [data-role="stateful-query"]').click();
+  await expect(page.locator('#panel-stateful [data-role="stateful-local-route"]')).toContainText(
+    'dummy'
+  );
+  await expect(
+    page.locator('#panel-stateful [data-role="stateful-result"] .fail-code')
+  ).toContainText('DATABASE_UPDATED');
+  await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeFocused();
+  await scanAt('Stateful PIR: invalid epoch sends fixed-shape cover and returns no record');
+
+  await page.locator('#panel-stateful [data-role="stateful-recover-update"]').click();
+  await expect(
+    page
+      .locator('#panel-stateful [data-role="stateful-update-evidence"] dt')
+      .filter({ hasText: /^Recovered current bytes after full rebuild$/ })
+      .locator('xpath=following-sibling::dd[1]')
+  ).toHaveText('yes', { timeout: 30_000 });
+  await expect(page.locator('#panel-stateful [data-role="stateful-local-route"]')).toContainText(
+    'retrieve'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeFocused();
+  await scanAt('Stateful PIR: full rebuild independently recovers the changed record');
+
+  await page.locator('#panel-stateful [data-role="stateful-lose"]').click();
+  await expect(page.locator('#panel-stateful .fail-code')).toContainText('STATE_LOST');
+  await expect(page.locator('#panel-stateful [data-role="stateful-server-transcript"]')).toContainText(
+    '512 B'
+  );
+  await expect(page.locator('#panel-stateful [data-role="stateful-setup"]')).toBeFocused();
+  await scanAt('Stateful PIR: lost client state sends cover but cannot recover a record');
+
+  for (const summary of await page.locator('#panel-stateful details.disclose > summary').all()) {
+    await summary.click();
+  }
+  await expect(page.locator('#panel-stateful details[open]')).toHaveCount(3);
+  await scanAt('Stateful PIR: persistence, adaptation and ORAM-limit disclosures open');
 
   // ── One Server vs Two ───────────────────────────────────────────────────
   await openTab(page, /One Server vs Two/, '#panel-versus');

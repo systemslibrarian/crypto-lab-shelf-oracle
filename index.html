@@ -20,7 +20,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Interactive single-server PIR under BFV: direct one-hot queries, executable SealPIR-style compressed-query expansion, homomorphic selection, and measured noise and communication costs."
+      content="Interactive single-server PIR: direct and compressed BFV queries beside a bounded executable Piano-style preprocessing and stateful online lesson."
     />
     <meta name="author" content="systemslibrarian" />
     <meta name="color-scheme" content="dark" />
@@ -153,12 +153,14 @@
       <div class="cl-hero">
         <div class="cl-hero-main">
           <h1 class="cl-hero-title">Shelf Oracle</h1>
-          <p class="cl-hero-sub">Single-server computational PIR · RLWE/BFV · SealPIR-style</p>
+          <p class="cl-hero-sub">Single-server PIR · RLWE/BFV · query expansion · stateful preprocessing</p>
           <p class="cl-hero-desc">
             Encrypt a one-hot selection vector under BFV, then compress 64 selectors into four
             fixed ciphertext blocks and execute their Galois-key expansion. Watch one server scan
             every record without learning the selected block or index, and account for serialized
-            bytes, major operations and the measured invariant-noise budget.
+            bytes, major operations and the measured invariant-noise budget. Then trade a full
+            client setup stream and retained private state for an eight-record online parity query,
+            and exercise refresh, loss and database-update boundaries.
           </p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
@@ -166,7 +168,8 @@
           <p class="cl-hero-why-text">
             Two-server PIR gives you privacy no computer can break — as long as the two operators
             never compare notes. Removing that assumption is possible, and this is what removing it
-            costs: one homomorphic multiply per record, and a noise budget that runs out.
+            costs. The BFV paths scan every record and spend a finite noise budget; the stateful path
+            instead streams the public database during setup and retains private one-use state.
           </p>
         </aside>
       </div>
@@ -186,6 +189,13 @@
           the results, and sends one ciphertext. The compressed exhibit sends four fixed query
           blocks and receives four fixed responses so neither count identifies the selected block.
         </p>
+        <p>
+          The stateful exhibit demonstrates a different trade: the client first streams the fixed
+          public database and builds secret parity hints. Each bounded online request then names one
+          position in each of eight chunks, so the server reads eight records and returns their XOR.
+          Those hints are consumed and refreshed, and losing or rolling back them is not the same as
+          losing an ORAM position map.
+        </p>
       </div>
 
       <p class="scope-note">
@@ -193,8 +203,8 @@
         record products, exact NTT/CRT only for dense expansion-key products, no constant-time
         discipline, the secret key in ordinary browser memory, and a 64-record shelf. Both
         "servers" are objects in this page — no network is involved. What is real is the
-        mathematics: every ciphertext, substitution, key switch, homomorphic multiply and noise
-        measurement on this page is computed, not scripted.
+        mathematics and state transition: every ciphertext, substitution, key switch, homomorphic
+        multiply, parity, refresh and noise measurement on this page is computed, not scripted.
       </p>
 
       <nav class="tabs" aria-label="Exhibits">
@@ -203,6 +213,7 @@
           <button class="tab-btn" role="tab" id="tab-server" aria-selected="false" aria-controls="panel-server" data-panel="server" tabindex="-1">The Server's View</button>
           <button class="tab-btn" role="tab" id="tab-fold" aria-selected="false" aria-controls="panel-fold" data-panel="fold" tabindex="-1">Homomorphic Selection</button>
           <button class="tab-btn" role="tab" id="tab-expand" aria-selected="false" aria-controls="panel-expand" data-panel="expand" tabindex="-1">Compressed Query</button>
+          <button class="tab-btn" role="tab" id="tab-stateful" aria-selected="false" aria-controls="panel-stateful" data-panel="stateful" tabindex="-1">Stateful PIR</button>
           <button class="tab-btn" role="tab" id="tab-versus" aria-selected="false" aria-controls="panel-versus" data-panel="versus" tabindex="-1">One Server vs Two</button>
           <button class="tab-btn" role="tab" id="tab-noise" aria-selected="false" aria-controls="panel-noise" data-panel="noise" tabindex="-1">Noise Exhaustion</button>
           <button class="tab-btn" role="tab" id="tab-scope" aria-selected="false" aria-controls="panel-scope" data-panel="scope" tabindex="-1">What It Does Not Hide</button>
@@ -214,6 +225,7 @@
         <section id="panel-server" class="panel" role="tabpanel" aria-labelledby="tab-server" tabindex="0" hidden></section>
         <section id="panel-fold" class="panel" role="tabpanel" aria-labelledby="tab-fold" tabindex="0" hidden></section>
         <section id="panel-expand" class="panel" role="tabpanel" aria-labelledby="tab-expand" tabindex="0" hidden></section>
+        <section id="panel-stateful" class="panel" role="tabpanel" aria-labelledby="tab-stateful" tabindex="0" hidden></section>
         <section id="panel-versus" class="panel" role="tabpanel" aria-labelledby="tab-versus" tabindex="0" hidden></section>
         <section id="panel-noise" class="panel" role="tabpanel" aria-labelledby="tab-noise" tabindex="0" hidden></section>
         <section id="panel-scope" class="panel" role="tabpanel" aria-labelledby="tab-scope" tabindex="0" hidden></section>
