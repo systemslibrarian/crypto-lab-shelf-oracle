@@ -414,6 +414,13 @@ body {
   flex: 0 0 auto;
   font-weight: 700;
 }
+.verdict > :not(.verdict-icon) {
+  /* A long failure code is still prose, not a reason to widen the page. The
+     flex item's automatic min-content width otherwise pushes the 280px layout
+     sideways even though the text itself is allowed to wrap. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .verdict-pass {
   background: color-mix(in oklab, var(--ok) 14%, var(--surface));
   border-color: color-mix(in oklab, var(--ok) 55%, var(--border));

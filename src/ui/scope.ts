@@ -127,7 +127,7 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         { class: 'callout callout-danger' },
         [
           el('strong', {}, 'What is not production. '),
-          `The record products remain schoolbook O(n²); only dense expansion-key products use the ` +
+          `Schoolbook O(n²) record products remain; only dense expansion-key products use the ` +
             `new exact NTT/CRT. No constant-time discipline anywhere — and the direct server loop ` +
             `skips zero plaintext coefficients, so its running time depends on its own data. Ring ` +
             `degree 1024. Each query ciphertext expands to sixteen selectors, and four fixed blocks ` +
