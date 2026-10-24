@@ -361,6 +361,201 @@ test.describe('compressed-query expansion is executed and costed from this imple
   });
 });
 
+test.describe('stateful preprocessing PIR executes the claims it prints', () => {
+  const valueAfter = async (page: Page, panel: string, label: string): Promise<string> =>
+    page
+      .locator(`${panel} dt`, { hasText: label })
+      .locator('xpath=following-sibling::dd[1]')
+      .innerText();
+
+  const headBytes = (text: string): number[] =>
+    [...text.matchAll(/\b[0-9a-f]{2}\b/g)].map((match) => Number.parseInt(match[0], 16));
+
+  test('INDEPENDENT RE-DERIVATION: the fixed wire and both displayed equations match the run', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('#panel-shelf .shelf-item').nth(23).click();
+    await openTab(page, /Stateful PIR/, '#panel-stateful');
+    await page.locator('#panel-stateful [data-role="stateful-setup"]').click();
+    await page.locator('#panel-stateful [data-role="stateful-query"]').click();
+
+    const indices = (await page
+      .locator('#panel-stateful [data-role="stateful-server-indices"]')
+      .innerText())
+      .split(/\s*·\s*/)
+      .map(Number);
+    expect(indices).toHaveLength(8);
+    indices.forEach((index, chunk) => {
+      expect(Number.isInteger(index)).toBe(true);
+      expect(Math.floor(index / 8)).toBe(chunk);
+    });
+    await expect(
+      page.locator('#panel-stateful [data-role="stateful-server-transcript"]')
+    ).toContainText('Canonical query 8 B');
+    await expect(
+      page.locator('#panel-stateful [data-role="stateful-server-transcript"]')
+    ).toContainText('Response 512 B');
+
+    const recovery = headBytes(
+      await page.locator('#panel-stateful [data-role="stateful-recovery-equation"]').innerText()
+    );
+    expect(recovery).toHaveLength(32);
+    for (let i = 0; i < 8; i += 1) {
+      expect(recovery[i] ^ recovery[8 + i] ^ recovery[16 + i]).toBe(recovery[24 + i]);
+    }
+    const refresh = headBytes(
+      await page.locator('#panel-stateful [data-role="stateful-refresh-equation"]').innerText()
+    );
+    expect(refresh).toHaveLength(24);
+    for (let i = 0; i < 8; i += 1) {
+      expect(refresh[i] ^ refresh[8 + i]).toBe(refresh[16 + i]);
+    }
+    await expect(page.locator('#panel-stateful [data-role="stateful-equations"]')).toContainText(
+      'Recovery equation across all 512 bytes: yes'
+    );
+    await expect(page.locator('#panel-stateful [data-role="stateful-equations"]')).toContainText(
+      'matches the retained hint'
+    );
+    await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
+      'Application bytes match the current database'
+    );
+    await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeFocused();
+  });
+
+  test('CROSS-CHECK: a cached repeat spends a distinct target and survives unrelated panel renders', async ({
+    page,
+  }) => {
+    await boot(page);
+    await openTab(page, /Stateful PIR/, '#panel-stateful');
+    await page.locator('#panel-stateful [data-role="stateful-setup"]').click();
+    await page.locator('#panel-stateful [data-role="stateful-query"]').click();
+    const firstEffective = Number(
+      await valueAfter(page, '#panel-stateful', 'Effective target')
+    );
+
+    await page.locator('#panel-stateful [data-role="stateful-repeat"]').click();
+    const coverEffective = Number(
+      await valueAfter(page, '#panel-stateful', 'Effective target')
+    );
+    expect(coverEffective).not.toBe(firstEffective);
+    expect(await valueAfter(page, '#panel-stateful', 'Local route')).toBe('cached-cover');
+    expect(await valueAfter(page, '#panel-stateful', 'Requests committed')).toBe('2');
+    expect(await valueAfter(page, '#panel-stateful', 'Unique effective targets spent')).toBe('2');
+    await expect(page.locator('#panel-stateful [data-role="stateful-repeat"]')).toBeFocused();
+
+    await openTab(page, /Homomorphic Selection/, '#panel-fold');
+    await openTab(page, /Stateful PIR/, '#panel-stateful');
+    expect(await valueAfter(page, '#panel-stateful', 'Requests committed')).toBe('2');
+    expect(await valueAfter(page, '#panel-stateful', 'Local route')).toBe('cached-cover');
+  });
+
+  test('FAILURE EVIDENCE: a retained non-target update corrupts stale recovery before detection, then rebuilds', async ({
+    page,
+  }) => {
+    await boot(page);
+    await openTab(page, /Stateful PIR/, '#panel-stateful');
+    await page.locator('#panel-stateful [data-role="stateful-setup"]').click();
+    await page.locator('#panel-stateful [data-role="stateful-update"]').click();
+
+    const evidence = page.locator('#panel-stateful [data-role="stateful-update-evidence"]');
+    await expect(evidence).toContainText(
+      'This is not an ordinary application query and is not evidence for the independent-target privacy or availability claim',
+    );
+    for (const claim of [
+      'Old record was retained as a replacement yes',
+      'New record actually differs yes',
+      'Old record still has a valid public tag yes',
+      'New record has a valid public tag yes',
+      'Stale recovery matches current diagnostic record no',
+      'Stale recovery public tag matches no',
+      'Snapshot digest detected the known update yes',
+    ]) {
+      await expect(evidence).toContainText(claim);
+    }
+    await expect(page.locator('#panel-stateful [data-role="stateful-equations"] .verdict-pass')).toHaveCount(2);
+    await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
+      'Application bytes do not match the current database'
+    );
+    await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
+      'public decode tag does not match'
+    );
+    await expect(page.locator('#panel-stateful .fail-code')).toHaveText('DATABASE_UPDATED:');
+    await expect(
+      page.locator('#panel-stateful [data-role="stateful-recover-update"]')
+    ).toBeFocused();
+
+    const executed = page.locator('#panel-stateful [data-role="stateful-executed-costs"]');
+    await expect(executed.locator('tr', { hasText: 'Online requests sent' }).locator('td')).toHaveText('1');
+    await expect(executed.locator('tr', { hasText: 'Online upload bytes' }).locator('td')).toHaveText('8 B');
+    await expect(executed.locator('tr', { hasText: 'Online download bytes' }).locator('td')).toHaveText('512 B');
+    await expect(executed.locator('tr', { hasText: 'Known-update digest bytes' }).locator('td')).toContainText('32768 B');
+
+    await page.locator('#panel-stateful [data-role="stateful-recover-update"]').click();
+    await expect(evidence).toContainText('Recovered current bytes after full rebuild yes');
+    await expect(page.locator('#panel-stateful [data-role="stateful-result"]')).toContainText(
+      'Application bytes match the current database'
+    );
+    await expect(page.locator('#panel-stateful [data-role="stateful-query"]')).toBeFocused();
+  });
+
+  test('INDEPENDENT RE-DERIVATION: the finite bound, crossover, codec and source limits are exact', async ({
+    page,
+  }) => {
+    await boot(page);
+    await openTab(page, /Stateful PIR/, '#panel-stateful');
+
+    const bound = await page.locator('#panel-stateful [data-role="stateful-bound"]').innerText();
+    const match = /(\d+) × \(7\/8\)\^(\d+) = ([\d.e+-]+) ≈ 2\^(-?[\d.]+)/i.exec(bound);
+    expect(match).not.toBeNull();
+    const queries = Number(match?.[1]);
+    const hints = Number(match?.[2]);
+    const printed = Number(match?.[3]);
+    const printedLog2 = Number(match?.[4]);
+    const independentlyDerived = queries * (7 / 8) ** hints;
+    expect(printed).toBeCloseTo(independentlyDerived, 18);
+    expect(printedLog2).toBeCloseTo(Math.log2(independentlyDerived), 2);
+    expect(bound).toContain('selected independently of the secret PRF coordinates');
+
+    const rows = page.locator('#panel-stateful [data-role="stateful-cost-table"] tbody tr');
+    await expect(rows).toHaveCount(3);
+    for (const [rowIndex, queryCount] of [1, 2, 33].entries()) {
+      const cells = rows.nth(rowIndex).locator('td');
+      const exact = async (cell: number): Promise<number> =>
+        Number(/^(\d+) B/.exec(await cells.nth(cell).innerText())?.[1]);
+      const setup = await exact(0);
+      const online = await exact(1);
+      const total = await exact(2);
+      const fullDatabase = await exact(4);
+      expect(setup).toBe(64 * 512);
+      expect(online).toBe(queryCount * (8 + 512));
+      expect(total).toBe(setup + online);
+      expect(fullDatabase).toBe(queryCount * 64 * 512);
+    }
+    await expect(page.locator('#panel-stateful')).toContainText(
+      'retain this static public database after one download would need no PIR queries at all'
+    );
+
+    const adapted = page.locator('#panel-stateful details', {
+      hasText: 'What is adapted, and what does not transfer',
+    });
+    await adapted.locator('summary').click();
+    await expect(adapted).toContainText('uint64/protobuf');
+    await expect(adapted).toContainText('O(N^ε) preprocessing-update time');
+    await expect(adapted).toContainText(
+      'optimal for its stated trade-off between server online time and client storage'
+    );
+    await expect(adapted.locator('a[href="https://eprint.iacr.org/2023/452"]')).toHaveCount(1);
+    await expect(
+      adapted.locator(
+        'a[href="https://github.com/wuwuz/Piano-PIR-new/tree/f7107cfadc15a0ac3df20f0bc64f126bf359b702"]'
+      )
+    ).toHaveCount(1);
+    await expect(adapted.locator('a[href="https://eprint.iacr.org/2022/1703"]')).toHaveCount(1);
+    await expect(adapted.locator('a[href="https://eprint.iacr.org/2022/081"]')).toHaveCount(1);
+  });
+});
+
 test.describe('the failure paths fire, and the page names the actual cause', () => {
   test('NOISE_BUDGET_EXHAUSTED is real: the same click succeeds at 2^26 and fails at 2^18', async ({
     page,
@@ -752,6 +947,33 @@ test.describe('the page is what it says it is', () => {
 });
 
 test.describe('the page does not fight the reader', () => {
+  test('the eight-tab roving keyboard order includes Stateful PIR', async ({ page }) => {
+    await boot(page);
+    const shelf = page.getByRole('tab', { name: /The Shelf/ });
+    await shelf.focus();
+
+    for (const name of [
+      /The Server's View/,
+      /Homomorphic Selection/,
+      /Compressed Query/,
+      /Stateful PIR/,
+    ]) {
+      await page.keyboard.press('ArrowRight');
+      const tab = page.getByRole('tab', { name });
+      await expect(tab).toBeFocused();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+    }
+    await expect(page.locator('#panel-stateful')).toBeVisible();
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByRole('tab', { name: /Compressed Query/ })).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(page.getByRole('tab', { name: /What It Does Not Hide/ })).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(shelf).toBeFocused();
+    await expect(page.locator('#panel-shelf')).toBeVisible();
+  });
+
   test('activating a control keeps focus on it across the re-render', async ({ page }) => {
     // Every panel rebuilds its whole subtree on interaction, which destroys the
     // element the reader was standing on. Without focus restoration, pressing

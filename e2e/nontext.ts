@@ -373,7 +373,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
     /**
      * Style and geometry are memoised per element for one pass.
      *
-     * A driven pass here walks seven tabpanels, and the expensive part is the
+     * A driven pass here walks eight tabpanels, and the expensive part is the
      * tile grids: 64 `.shelf-item` buttons on the shelf and a further 64
      * `.ct-tile` controls on each of two other panels, every one of them a
      * bordered control this oracle has to judge — all siblings re-walking the

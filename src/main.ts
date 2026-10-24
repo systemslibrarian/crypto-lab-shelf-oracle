@@ -8,9 +8,10 @@ import { renderVersus, resetVersus } from './ui/versus';
 import { renderNoise, resetNoise } from './ui/noise';
 import { renderScope, resetScope } from './ui/scope';
 import { renderExpand, resetExpand } from './ui/expand';
+import { renderStateful } from './ui/stateful';
 
 /**
- * The shell: seven tabs, one lab state, and a rule about when panels rebuild.
+ * The shell: eight tabs, one lab state, and a rule about when panels rebuild.
  *
  * Panels render LAZILY — a tab that has never been opened has an empty panel —
  * and every mounted panel re-renders when the lab's parameters change. That
@@ -19,13 +20,22 @@ import { renderExpand, resetExpand } from './ui/expand';
  * rather than showing a stale ciphertext beside a new parameter set.
  */
 
-type PanelId = 'shelf' | 'server' | 'fold' | 'expand' | 'versus' | 'noise' | 'scope';
+type PanelId =
+  | 'shelf'
+  | 'server'
+  | 'fold'
+  | 'expand'
+  | 'stateful'
+  | 'versus'
+  | 'noise'
+  | 'scope';
 
 const RENDERERS: Record<PanelId, (root: HTMLElement, lab: Lab) => void> = {
   shelf: renderShelf,
   server: renderServerView,
   fold: renderFold,
   expand: renderExpand,
+  stateful: renderStateful,
   versus: renderVersus,
   noise: renderNoise,
   scope: renderScope,
@@ -46,6 +56,11 @@ function invalidateCaches(reason: string): void {
   resetVersus(reason);
   resetNoise(reason);
   resetScope(reason);
+  // The bounded stateful-PIR epoch belongs to its own fixed 64 x 512-byte
+  // database and live entropy source. Shelf selection only chooses its next
+  // application target, while BFV modulus/key/seed controls are unrelated.
+  // Its panel therefore re-renders on Lab changes but retires state only
+  // through its explicit loss, update, malformed-response and rebuild actions.
 }
 
 async function boot(): Promise<void> {

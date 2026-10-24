@@ -267,10 +267,10 @@ body {
 
 /* THE `[hidden]` CASCADE TRAP, closed explicitly.
    The UA stylesheet's `[hidden] { display: none }` is a low-specificity rule,
-   and `.panel { display: grid }` outranks it. Without this line the six
+   and `.panel { display: grid }` outranks it. Without this line the seven
    inactive tabpanels stay in the layout as zero-height grids — invisible, but
    still `tabindex="0"` and still in the tab order, so a keyboard reader lands
-   on six focus targets that paint nothing (WCAG 2.4.3 / 2.4.7). The gate's
+   on seven focus targets that paint nothing (WCAG 2.4.3 / 2.4.7). The gate's
    `expectNoInvisibleFocusTargets` found exactly that before this rule existed.
    Scoped to `#app` so it cannot reach into the shared top bar. */
 #app [hidden] {

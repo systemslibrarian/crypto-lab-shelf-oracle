@@ -103,10 +103,11 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         { class: 'callout callout-caveat' },
         [
           el('strong', {}, 'What this page does not prove. '),
-          `It does not prove that RLWE is hard, that these parameters are secure, or that a ` +
-            `deployment built this way would be private. It demonstrates that a correctly formed ` +
-            `single-server PIR query returns the right record while carrying no index a server can ` +
-            `read without the key — and it demonstrates the costs of doing so.`,
+          `It does not prove that RLWE is hard, that a PRF is secure, that these bounded parameters ` +
+            `inherit a paper's theorem, or that a deployment built this way would be private. It ` +
+            `demonstrates that three correctly formed single-server PIR routes return the requested ` +
+            `record under their stated models, and it executes the distinct costs and state changes ` +
+            `that make those claims possible.`,
         ]
       ),
       el(
@@ -117,9 +118,11 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
           `The BFV key generation, encryption, decryption, plaintext-ciphertext multiplication and ` +
             `homomorphic addition; the bounded Galois substitutions, noisy key switching and exact ` +
             `NTT/CRT products; the negacyclic ring arithmetic; the ChaCha20 sampler and its RFC 8439 ` +
-            `vectors; the noise measurement; the two-server XOR protocol; every displayed ` +
-            `cryptographic-buffer byte count (taken by serializing) and browser timing. Transport ` +
-            `framing and low-level instruction counts are not included.`,
+            `vectors; the Piano-style setup parities, eight-index online request, recovery and hint ` +
+            `refresh; the noise measurement; the two-server XOR protocol; every displayed ` +
+            `cryptographic-buffer byte count (taken by serializing) and browser timing. Modeled ` +
+            `stateful-PIR operation counts are kept separate from measured browser timings. ` +
+            `Transport framing and low-level instruction counts are not included.`,
         ]
       ),
       el(
@@ -134,8 +137,11 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
             `cover the 64-record catalog; there is no multi-dimensional indexing, modulus switching ` +
             `or seeded ciphertext compression. The 2018 HES table uses Gaussian error while this ` +
             `lab uses centred-binomial error, so the page makes only a modulus-bit comparison. The ` +
-            `secret key lives in ordinary browser memory. Nothing has been audited. Both "servers" ` +
-            `are objects in this page.`,
+            `BFV secret key and stateful PIR hints live in ordinary browser memory. The bounded ` +
+            `stateful construction is a static-public-database, honest-but-curious teaching ` +
+            `adaptation: it does not provide answer integrity, freshness, rollback protection, ` +
+            `traffic hiding or crash-safe state. Nothing has been audited. Every "server" is an ` +
+            `object in this page.`,
         ]
       ),
       el('div', { id: 'decryption-feedback-research', class: 'callout callout-caveat' }, [
@@ -159,6 +165,17 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
             `SealPIR's client pre-scaling, algebraically equivalent to the paper's server-side ` +
             `inverse scale. It sends four fixed blocks, expands each over sixteen positions, uses ` +
             `that same inner product across all 64 records and returns four fixed responses.`
+        ),
+        el(
+          'p',
+          {},
+          `The Stateful PIR panel is a bounded adaptation of Zhou, Park, Shi and Zheng's Piano ` +
+            `(IEEE Symposium on Security and Privacy 2024; IACR ePrint 2023/452). A client-specific ` +
+            `setup streams the static public database and retains secret parity hints. The server ` +
+            `has no transformed ProcessDB artifact: online it receives eight compact indices, ` +
+            `XORs eight records and returns one parity. The page does not transfer Piano's ` +
+            `asymptotic, storage or malicious-server results to this 64-record adapter, and it does ` +
+            `not implement the paper's separate hierarchical dynamic extension.`
         ),
         el(
           'p',
@@ -277,28 +294,28 @@ function logOutput(): HTMLElement {
 
 function claimTable(): HTMLElement {
   const rows: Array<[string, string, string]> = [
-    ['Which record was requested', 'Hidden by the protocol', 'The direct path relies on decision RLWE; the compressed path additionally publishes key-dependent evaluation material and relies on the stated circular-security assumption.'],
+    ['Which record was requested', 'Hidden by the protocol', 'The direct path relies on decision RLWE; the compressed path additionally publishes key-dependent evaluation material and relies on the stated circular-security assumption. The bounded stateful path relies on secret PRF-defined hints, one-time refresh state and its stated distinct-target model.'],
     [
       'Whether the response length reveals it',
       'Hidden by the protocol',
-      'Direct: one fixed ciphertext. Compressed: four fixed ciphertexts. Neither count varies with the index; that is construction, not padding.',
+      'Direct: one fixed ciphertext. Compressed: four fixed ciphertexts. Stateful: one 512-byte parity. None of those lengths varies with the index; that is construction, not padding.',
     ],
     [
       'Whether the query length reveals it',
       'Hidden by the protocol',
-      'The observer exercise uses one ciphertext per shelf position. The full-catalog compressed route uses four fixed query blocks after reusable evaluation-key setup and returns four fixed responses. Both shapes are fixed for the 64-record catalog, not its index.',
+      'The observer exercise uses one ciphertext per shelf position. The compressed route uses four fixed query blocks. The stateful route uses exactly eight one-byte positions, one per chunk. All three shapes are fixed for the 64-record catalog, not its index.',
     ],
     ['That a query happened', 'NOT hidden', 'The request is visible to anyone on the path.'],
     ['When it happened', 'NOT hidden', 'Timing is a deployment concern: batching or a fixed schedule, not PIR.'],
     ['How often, and how many', 'NOT hidden', 'Rate and count leak. Cover traffic is a separate mechanism.'],
     ['Who is asking', 'NOT hidden', 'Client identity and network address are outside the protocol entirely.'],
-    ['The size of the database', 'NOT hidden', 'The shelf length is public; the query length announces it.'],
+    ['The size of the database', 'NOT hidden', 'The shelf is public, and the stateful client streams the entire fixed database during setup.'],
     ['Which records exist at all', 'NOT hidden', 'The server owns the shelf and can enumerate it.'],
     ['Whether the answer is honest', 'NOT hidden', 'PIR gives no integrity. A malicious server can return a lie with a matching tag.'],
     [
       'Sequence of requested indices',
       'Hidden by the protocol',
-      'With fresh randomness, each full-scan query hides its index under the same stated multi-message assumptions. Query occurrence, timing and count remain visible in the rows above.',
+      'Fresh BFV randomness protects the full-scan routes. The bounded stateful route consumes unique effective targets and sends a fresh cover for a cached repeat; lost or rolled-back state can reuse one-time structure and violate that model. Query occurrence, timing and count remain visible.',
     ],
   ];
   const table = el('table', { class: 'data' }, [
@@ -365,9 +382,10 @@ function forwardLinks(): HTMLElement {
           'ORAM Vault'
         ),
         ' — Path ORAM (Stefanov et al., CCS 2013) hides a logical access sequence from a server ' +
-          'that observes data-dependent physical storage locations. This page instead performs ' +
-          'the same full 64-record scan on every query; its visible timing and count are traffic ' +
-          'metadata, not an index-dependent storage trace.',
+          'that observes data-dependent physical storage locations. This page’s BFV routes perform ' +
+          'the same full 64-record scan on every query; its stateful route touches eight records ' +
+          'online only after a full setup stream and with private consumable hint state. Neither is ' +
+          'an ORAM position map or stash, and visible timing and count remain traffic metadata.',
       ]),
       el('li', { role: 'listitem' }, [
         el(
