@@ -25,7 +25,7 @@ import {
 } from '../pir/xorpir';
 
 /**
- * Act four: one server against two, on the same shelf, with measured numbers.
+ * Act five: one server against two, on the same shelf, with measured numbers.
  *
  * Both protocols run here, on this page, over the identical 64 records. Nothing
  * is quoted from a paper and nothing is quoted from a sibling lab — Oblivious
@@ -265,14 +265,12 @@ function honestyNotes(shelfSize: number): HTMLElement {
       'p',
       { class: 'callout callout-caveat' },
       [
-        el('strong', {}, 'This upload column is not SealPIR’s. '),
-        `A real SealPIR client sends ONE ciphertext plus Galois keys and the server expands it into ` +
-          `the ${shelfSize}-element selection vector using plaintext substitutions. That turns an ` +
-          `upload linear in the shelf into a constant one, and it is the single biggest engineering ` +
-          `difference between this page and the paper. Query expansion needs ciphertext rotations ` +
-          `and key switching, which are out of scope in a browser — so the number above is what ` +
-          `THIS implementation moved, and it is worse than the state of the art by roughly a factor ` +
-          `of the shelf length.`,
+        el('strong', {}, 'This column is the direct baseline. '),
+        `It measures one ciphertext per position over all ${shelfSize} records at the direct ` +
+          `path's default modulus. The Compressed Query exhibit separately executes SealPIR-style ` +
+          `expansion over the same 64-record catalog at its 27-bit modulus: four fixed 16-selector ` +
+          `query blocks after setup, four fixed responses, and reusable Galois keys whose bytes are ` +
+          `counted. Its figures remain in that panel so the table never mixes parameter sets.`,
       ]
     ),
     el(
@@ -292,9 +290,9 @@ function honestyNotes(shelfSize: number): HTMLElement {
       [
         el('strong', {}, 'And the timings are browser timings. '),
         `Both protocols run as ordinary JavaScript in one tab, on whatever machine you are reading ` +
-          `this on, with a schoolbook O(n²) polynomial multiply where a real implementation uses a ` +
-          `number-theoretic transform. Treat the ratio between the two columns as meaningful and ` +
-          `the absolute values as anecdote.`,
+          `this on. This direct comparison uses schoolbook O(n²) record products; the separate ` +
+          `expansion path uses an exact two-prime NTT/CRT for dense key-switch products. Treat the ` +
+          `absolute timings as anecdote.`,
       ]
     ),
     disclose('Why the two-server scheme is cheaper, and why that is not the end of it', [

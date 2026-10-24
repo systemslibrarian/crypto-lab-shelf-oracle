@@ -267,10 +267,10 @@ body {
 
 /* THE `[hidden]` CASCADE TRAP, closed explicitly.
    The UA stylesheet's `[hidden] { display: none }` is a low-specificity rule,
-   and `.panel { display: grid }` outranks it. Without this line the five
+   and `.panel { display: grid }` outranks it. Without this line the six
    inactive tabpanels stay in the layout as zero-height grids — invisible, but
    still `tabindex="0"` and still in the tab order, so a keyboard reader lands
-   on five focus targets that paint nothing (WCAG 2.4.3 / 2.4.7). The gate's
+   on six focus targets that paint nothing (WCAG 2.4.3 / 2.4.7). The gate's
    `expectNoInvisibleFocusTargets` found exactly that before this rule existed.
    Scoped to `#app` so it cannot reach into the shared top bar. */
 #app [hidden] {
@@ -359,11 +359,12 @@ body {
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: color-mix(in oklab, var(--accent) 16%, var(--surface-2));
   border-color: var(--accent-text);
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   cursor: not-allowed;
   color: var(--text-dim);
   border-color: var(--border);
@@ -373,7 +374,7 @@ body {
   border-color: var(--accent-text);
   color: var(--accent-ink);
 }
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled):not([aria-disabled="true"]) {
   background: color-mix(in oklab, var(--accent) 82%, #ffffff);
   border-color: #ffffff;
 }
@@ -381,7 +382,7 @@ body {
   border-color: var(--bad);
   color: var(--bad-text);
 }
-.btn-danger:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled):not([aria-disabled="true"]) {
   background: color-mix(in oklab, var(--bad) 18%, var(--surface-2));
   border-color: var(--bad-text);
 }

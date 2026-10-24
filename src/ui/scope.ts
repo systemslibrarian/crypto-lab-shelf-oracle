@@ -16,7 +16,7 @@ import { buildQuery, serverAnswer } from '../pir/pir';
 import { serializeCiphertext, serializeQuery } from '../pir/serialize';
 
 /**
- * Act six: the negative claim, shown rather than asserted.
+ * Act seven: the negative claim, shown rather than asserted.
  *
  * PIR hides the index under its security model. It does not hide that a query
  * happened, when it happened, or how often. Saying that in a paragraph is the
@@ -115,9 +115,11 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         [
           el('strong', {}, 'What is real here. '),
           `The BFV key generation, encryption, decryption, plaintext-ciphertext multiplication and ` +
-            `homomorphic addition; the negacyclic ring arithmetic; the ChaCha20 sampler and its ` +
-            `RFC 8439 vectors; the noise measurement; the two-server XOR protocol; every byte count ` +
-            `(taken by serializing) and every timing (taken by timing).`,
+            `homomorphic addition; the bounded Galois substitutions, noisy key switching and exact ` +
+            `NTT/CRT products; the negacyclic ring arithmetic; the ChaCha20 sampler and its RFC 8439 ` +
+            `vectors; the noise measurement; the two-server XOR protocol; every displayed ` +
+            `cryptographic-buffer byte count (taken by serializing) and browser timing. Transport ` +
+            `framing and low-level instruction counts are not included.`,
         ]
       ),
       el(
@@ -125,12 +127,15 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         { class: 'callout callout-danger' },
         [
           el('strong', {}, 'What is not production. '),
-          `Schoolbook O(n²) polynomial multiplication instead of a number-theoretic transform. No ` +
-            `constant-time discipline anywhere — and the server's inner loop deliberately skips ` +
-            `zero plaintext coefficients, so its running time depends on its own data. Ring degree ` +
-            `1024, the smallest row of the standard's table. No query expansion, no ` +
-            `multi-dimensional indexing, no modulus switching. The secret key lives in ordinary ` +
-            `browser memory. Nothing has been audited. Both "servers" are objects in this page.`,
+          `The record products remain schoolbook O(n²); only dense expansion-key products use the ` +
+            `new exact NTT/CRT. No constant-time discipline anywhere — and the direct server loop ` +
+            `skips zero plaintext coefficients, so its running time depends on its own data. Ring ` +
+            `degree 1024. Each query ciphertext expands to sixteen selectors, and four fixed blocks ` +
+            `cover the 64-record catalog; there is no multi-dimensional indexing, modulus switching ` +
+            `or seeded ciphertext compression. The 2018 HES table uses Gaussian error while this ` +
+            `lab uses centred-binomial error, so the page makes only a modulus-bit comparison. The ` +
+            `secret key lives in ordinary browser memory. Nothing has been audited. Both "servers" ` +
+            `are objects in this page.`,
         ]
       ),
       el('div', { id: 'decryption-feedback-research', class: 'callout callout-caveat' }, [
@@ -146,11 +151,14 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         el(
           'p',
           {},
-          `The protocol is SealPIR (Sebastian Angel, Hao Chen, Kim Laine and Srinath Setty, ` +
+          `The direct protocol is SealPIR (Sebastian Angel, Hao Chen, Kim Laine and Srinath Setty, ` +
             `"PIR with Compressed Queries and Amortized Query Processing", IEEE Symposium on ` +
             `Security and Privacy, 2018) reduced to its direct one-hot form: the client encrypts a ` +
             `selection vector, the server takes a homomorphic inner product against its records, ` +
-            `and one ciphertext comes back.`
+            `and one ciphertext comes back. The separate Compressed Query panel uses Microsoft ` +
+            `SealPIR's client pre-scaling, algebraically equivalent to the paper's server-side ` +
+            `inverse scale. It sends four fixed blocks, expands each over sixteen positions, uses ` +
+            `that same inner product across all 64 records and returns four fixed responses.`
         ),
         el(
           'p',
@@ -170,8 +178,10 @@ export function renderScope(root: HTMLElement, lab: Lab): void {
         el(
           'p',
           {},
-          `Parameter security is quoted from the Homomorphic Encryption Security Standard ` +
-            `(HomomorphicEncryption.org, November 2018), uniform ternary secret, classical column.`
+          `Modulus-bit ceilings are quoted from the Homomorphic Encryption Security Standard ` +
+            `(HomomorphicEncryption.org, November 2018), uniform ternary secret, classical column. ` +
+            `Its Gaussian error model differs from this lab's centred-binomial error, so its ` +
+            `security estimates are not transferred here.`
         ),
       ]),
     ])
@@ -246,8 +256,9 @@ function logOutput(): HTMLElement {
         ? [
             el('strong', {}, `Every row is the same size: ${[...sizes][0]} bytes. `),
             `Response length is fixed by construction here — the answer is one ciphertext whatever ` +
-              `you asked for — and the query is one ciphertext per shelf position regardless of ` +
-              `which position. That is one metadata channel this design genuinely closes.`,
+              `you asked for — and this observer exercise's direct query is one ciphertext per ` +
+              `shelf position regardless of which position. The compressed exhibit has a different, ` +
+              `also index-independent shape. That is one metadata channel this design genuinely closes.`,
           ]
         : [
             el('strong', {}, 'The sizes differ across rows. '),
@@ -266,16 +277,16 @@ function logOutput(): HTMLElement {
 
 function claimTable(): HTMLElement {
   const rows: Array<[string, string, string]> = [
-    ['Which record was requested', 'Hidden by the protocol', 'Under decision RLWE at these parameters, and only then.'],
+    ['Which record was requested', 'Hidden by the protocol', 'The direct path relies on decision RLWE; the compressed path additionally publishes key-dependent evaluation material and relies on the stated circular-security assumption.'],
     [
       'Whether the response length reveals it',
       'Hidden by the protocol',
-      'One ciphertext, the same size for every index — fixed by construction, not by padding.',
+      'Direct: one fixed ciphertext. Compressed: four fixed ciphertexts. Neither count varies with the index; that is construction, not padding.',
     ],
     [
       'Whether the query length reveals it',
       'Hidden by the protocol',
-      'One ciphertext per shelf position, the same whichever position. The length announces the shelf size, never the index.',
+      'The observer exercise uses one ciphertext per shelf position. The full-catalog compressed route uses four fixed query blocks after reusable evaluation-key setup and returns four fixed responses. Both shapes are fixed for the 64-record catalog, not its index.',
     ],
     ['That a query happened', 'NOT hidden', 'The request is visible to anyone on the path.'],
     ['When it happened', 'NOT hidden', 'Timing is a deployment concern: batching or a fixed schedule, not PIR.'],
@@ -284,7 +295,11 @@ function claimTable(): HTMLElement {
     ['The size of the database', 'NOT hidden', 'The shelf length is public; the query length announces it.'],
     ['Which records exist at all', 'NOT hidden', 'The server owns the shelf and can enumerate it.'],
     ['Whether the answer is honest', 'NOT hidden', 'PIR gives no integrity. A malicious server can return a lie with a matching tag.'],
-    ['Access patterns over many queries', 'NOT hidden', 'Repeated queries are separately observable events; hiding the sequence is ORAM’s problem, not PIR’s.'],
+    [
+      'Sequence of requested indices',
+      'Hidden by the protocol',
+      'With fresh randomness, each full-scan query hides its index under the same stated multi-message assumptions. Query occurrence, timing and count remain visible in the rows above.',
+    ],
   ];
   const table = el('table', { class: 'data' }, [
     el(
@@ -349,8 +364,10 @@ function forwardLinks(): HTMLElement {
           },
           'ORAM Vault'
         ),
-        ' — Path ORAM (Stefanov et al., CCS 2013) hides the SEQUENCE of locations touched across ' +
-          'many accesses, which is the row this page’s table marks as not hidden.',
+        ' — Path ORAM (Stefanov et al., CCS 2013) hides a logical access sequence from a server ' +
+          'that observes data-dependent physical storage locations. This page instead performs ' +
+          'the same full 64-record scan on every query; its visible timing and count are traffic ' +
+          'metadata, not an index-dependent storage trace.',
       ]),
       el('li', { role: 'listitem' }, [
         el(

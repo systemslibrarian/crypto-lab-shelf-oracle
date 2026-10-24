@@ -417,11 +417,11 @@ export async function auditContrast(
     /**
      * Style and geometry are memoised per element for one pass.
      *
-     * A driven pass here walks a six-panel document, and the expensive part is
+     * A driven pass here walks a seven-panel document, and the expensive part is
      * the tile grids: the shelf renders 64 `.shelf-item` buttons with three
      * text spans each, and both the Server's View and Homomorphic Selection
      * panels render a further 64 `.ct-tile`s apiece — nearly 400 sibling
-     * elements re-walking the same ancestors up to `<body>`, plus five wide
+     * elements re-walking the same ancestors up to `<body>`, plus several wide
      * `.table-wrap` tables. Without the caches the pass re-reads the same
      * computed styles and rects tens of thousands of times. Nothing mutates the
      * DOM during the pass, so the cached values cannot go stale.
@@ -538,11 +538,8 @@ export async function auditContrast(
       // A closed <details> hides its body with `content-visibility: hidden`,
       // not `display: none`, and Chromium keeps the last laid-out geometry for
       // that subtree — so the `display`/rect tests above all pass for text
-      // that paints nothing. `checkVisibility()` catches it. This page is full
-      // of the shape: five `details.disclose` panels ship SHUT — the
-      // byte-to-coefficient packing table, the fresh-randomness argument, the
-      // three-line derivation of why the sum selects, the two-server cost
-      // discussion and the malformed-query note. The gate opens each by
+      // that paints nothing. `checkVisibility()` catches it. This page has
+      // several `details.disclose` panels that ship SHUT. The gate opens each by
       // clicking its <summary>, which is the route a reader has, rather than
       // setting `.open` from script.
       if ((el as HTMLElement).checkVisibility?.() === false) return false;
@@ -697,7 +694,7 @@ export async function auditContrast(
      *
      * Whether it is a no-op here depends on declarations that are easy to
      * change and easy to miss, which is the argument for keeping it: this page
-     * runs six exhibits and many screens deep, so the day a `height: 100%`
+     * runs seven exhibits and many screens deep, so the day a `height: 100%`
      * appears on `html` or `body`, everything below the first screen would
      * report against a white page that does not exist — in a lab whose default
      * dark canvas is near-black.

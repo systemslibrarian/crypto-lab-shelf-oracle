@@ -178,7 +178,7 @@ describe('wire format', () => {
   });
 });
 
-describe('parameters against the published table', () => {
+describe('parameter bit sizes against the published table', () => {
   /**
    * SPEC KAT — Homomorphic Encryption Security Standard (HomomorphicEncryption.org,
    * November 2018), uniform ternary secret, classical security. These are the
@@ -209,32 +209,35 @@ describe('parameters against the published table', () => {
     expect(HES_TERNARY_CLASSICAL[n][level]).toBe(ceiling);
   });
 
-  it('the shipped default sits inside the 128-bit row', () => {
+  it('the shipped default stays below the 128-bit row modulus ceiling', () => {
     const a = assessSecurity(P);
     expect(a.logQ).toBe(26);
     expect(a.ceiling128).toBe(27);
-    expect(a.inTable).toBe(true);
-    expect(a.level).toBe(128);
+    expect(a.atOrBelow128BitCeiling).toBe(true);
+    expect(a.referenceLevel).toBe(128);
     expect(a.summary).toContain('128-bit');
+    expect(a.summary).toContain('bit-size comparison');
+    expect(a.summary).toContain('not a transferred security estimate');
   });
 
-  it('the largest selectable modulus leaves the table, and the assessment says so', () => {
+  it('the largest selectable modulus exceeds the bit ceiling without calling that proof', () => {
     const a = assessSecurity(makeParams(MODULI[MODULI.length - 1].q, 512));
     expect(a.logQ).toBe(30);
-    expect(a.inTable).toBe(false);
-    expect(a.level).toBe(0);
+    expect(a.atOrBelow128BitCeiling).toBe(false);
+    expect(a.referenceLevel).toBe(0);
+    expect(a.summary).toContain('does not prove');
     expect(a.summary).toContain('exceeds');
   });
 
-  it('every modulus below the top one stays inside the table', () => {
+  it('every modulus below the top one stays at or below the 128-bit bit ceiling', () => {
     for (const option of MODULI.slice(0, -1)) {
-      expect(assessSecurity(makeParams(option.q, 512)).inTable).toBe(true);
+      expect(assessSecurity(makeParams(option.q, 512)).atOrBelow128BitCeiling).toBe(true);
     }
   });
 
   it('a ring degree the table does not carry is reported as uncovered, not as safe', () => {
     const a = assessSecurity({ ...P, n: 512 });
-    expect(a.inTable).toBe(false);
+    expect(a.atOrBelow128BitCeiling).toBe(false);
     expect(a.ceiling128).toBeNull();
     expect(a.summary).toContain('not a row');
   });
@@ -243,6 +246,6 @@ describe('parameters against the published table', () => {
     // 2^27 + 1 must read as 28 bits, not 27.
     const a = assessSecurity({ ...P, q: 2 ** 27 + 1 });
     expect(a.logQ).toBe(28);
-    expect(a.inTable).toBe(false);
+    expect(a.atOrBelow128BitCeiling).toBe(false);
   });
 });

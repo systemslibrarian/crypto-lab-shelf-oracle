@@ -38,12 +38,12 @@ export const REFLOW = { width: 280, height: 800 };
  *
  *  2. IT FORCED EVERY PANEL VISIBLE FROM SCRIPT. The old drive stripped every
  *     `[hidden]` attribute and set every `<details>.open` by JS before its only
- *     scan. Stripping `hidden` puts all six tabpanels on screen AT ONCE — a
+ *     scan. Stripping `hidden` puts all seven tabpanels on screen AT ONCE — a
  *     rendering no reader can reach and axe then scans instead of the real one
  *     — and script-opening the disclosures means the SHUT state, which is what
  *     every reader arrives at, was never scanned at all. This gate switches
- *     tabs by clicking them and opens each of the five `details.disclose`
- *     panels through its `<summary>`, which is the route a reader has, and
+ *     tabs by clicking them and opens each `details.disclose` panel through
+ *     its `<summary>`, which is the route a reader has, and
  *     scans before and after.
  *
  *  3. IT DROVE BLIND AND THEN THREW THE STATES AWAY. The old drive clicked
@@ -302,7 +302,7 @@ export async function boot(page: Page): Promise<void> {
   await expect(page.locator('main')).toHaveCount(1);
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.locator('h1')).toHaveText('Shelf Oracle');
-  await expect(page.locator('.tab-btn')).toHaveCount(6);
+  await expect(page.locator('.tab-btn')).toHaveCount(7);
 
   // The shared skip link points at an id that exists. axe's skip-link rule is
   // best-practice, not WCAG-tagged, so `withTags` never runs it — a skip link
@@ -321,8 +321,8 @@ export async function boot(page: Page): Promise<void> {
   ).toHaveCount(0);
   await expect(page.locator('#cl-theme-toggle')).toHaveCount(0);
 
-  // ── The arrival state: The Shelf active, five panels unrendered ─────────
-  // Every panel is rendered lazily, so the other five are hidden AND EMPTY
+  // ── The arrival state: The Shelf active, six panels unrendered ──────────
+  // Every panel is rendered lazily, so the other six are hidden AND EMPTY
   // until their tab is first activated — asserted, because "empty" is this
   // lab's tell that a renderer threw (see `watchPageErrors`).
   await expect(page.locator('#panel-shelf .shelf-item')).toHaveCount(64);
@@ -331,7 +331,7 @@ export async function boot(page: Page): Promise<void> {
     'aria-pressed',
     'true'
   );
-  for (const id of ['server', 'fold', 'versus', 'noise', 'scope']) {
+  for (const id of ['server', 'fold', 'expand', 'versus', 'noise', 'scope']) {
     await expect(page.locator(`#panel-${id}`)).toBeHidden();
     await expect(page.locator(`#panel-${id}`)).toBeEmpty();
   }
@@ -353,7 +353,7 @@ export async function boot(page: Page): Promise<void> {
  *
  * WCAG 1.4.10 (Reflow, AA). axe has no rule for this at all. This lab's long
  * values are hex runs and serialized ciphertext heads inside `.code` and
- * `.ct-tile`, which rely on `overflow-wrap: anywhere`; its five wide tables
+ * `.ct-tile`, which rely on `overflow-wrap: anywhere`; its wide tables
  * live inside `.table-wrap { overflow-x: auto }` scrollers, which is the
  * sanctioned way to hold a wide table without pushing the document sideways.
  * So the shapes at risk are a new unwrapped run outside a scroller, or a grid
@@ -404,9 +404,8 @@ export async function expectNoHorizontalOverflow(page: Page, label: string): Pro
  * If it holds no focusable content it needs `tabindex="0"`, so it becomes a
  * focus target arrow keys can then scroll.
  *
- * This lab has five real scrollers — every `.table-wrap` around the packing
- * table, the head-to-head comparison, the predicted-budget table, the observer
- * log and the what-is-hidden table — and each is built by the `scroller()`
+ * This lab has multiple real scrollers — every `.table-wrap` around a packing,
+ * cost, expansion, noise, observer or claim table — and each is built by `scroller()`
  * helper, which gives it `tabindex="0"`, `role="group"` and an `aria-label`
  * together. So this assertion is LIVE here rather than vacuous, and it is what
  * catches a wide table added by hand instead of through that helper. A scroller
@@ -443,7 +442,7 @@ export async function expectScrollersReachable(page: Page, label: string): Promi
  * DO remove an element from the tab order, so those are skipped rather than
  * flagged — the failure is specifically the invisible-but-tabbable pair. The
  * `hidden` tabpanels here take the `display: none` route, which is why the
- * five inactive panels' worth of controls — up to 64 tiles apiece — are
+ * six inactive panels' worth of controls — up to 64 tiles apiece — are
  * legitimately absent from the tab order.
  *
  * Off-screen-but-focusable is the WCAG-sanctioned skip-link idiom and is
@@ -729,12 +728,12 @@ async function openTab(page: Page, name: RegExp, panelId: string): Promise<void>
  * Five things shape this drive:
  *
  *  - THE ARRIVAL STATE IS SCANNED FIRST, exactly as a reader gets it: The Shelf
- *    active with position 0 selected, five panels hidden and unrendered, the
+ *    active with position 0 selected, six panels hidden and unrendered, the
  *    one disclosure shut. The gate this replaces force-revealed all of it
  *    before its only scan.
  *
  *  - EVERY PANEL IS RENDERED LAZILY, so a tab that is never clicked is a panel
- *    that is never even IN the DOM. Each of the six is activated through its
+ *    that is never even IN the DOM. Each panel is activated through its
  *    real tab button and scanned in its own driven states.
  *
  *  - EVERY FAILURE AND ALARM STATE. The exhausted-budget verdict, all four
@@ -759,7 +758,7 @@ async function openTab(page: Page, name: RegExp, panelId: string): Promise<void>
 export async function driveAllStates(page: Page, label: string): Promise<void> {
   const scanAt = (s: string): Promise<void> => scan(page, `${label} / ${s}`);
 
-  await scanAt('arrival: The Shelf active, five panels unrendered, the disclosure shut');
+  await scanAt('arrival: The Shelf active, six panels unrendered, the disclosure shut');
 
   // ── The shared skip link, focused ───────────────────────────────────────
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
@@ -910,6 +909,48 @@ export async function driveAllStates(page: Page, label: string): Promise<void> {
   await page.getByRole('button', { name: 'Fold one record' }).hover();
   await scanAt('Fold: the primary button hovered');
 
+  // ── Compressed Query ────────────────────────────────────────────────────
+  // Pin the run so this expensive path is deterministic in both viewports.
+  await openTab(page, /The Shelf/, '#panel-shelf');
+  await page.fill('#run-seed', 'gate-compressed-query');
+  await page.getByRole('button', { name: 'Pin this seed' }).click();
+  await expect(
+    page.locator('#panel-shelf [data-role="seed-status"] .verdict-alarm')
+  ).toContainText('gate-compressed-query');
+  await page.locator('#panel-shelf .shelf-item').nth(41).click();
+  await openTab(page, /Compressed Query/, '#panel-expand');
+  await expect(page.locator('#panel-expand [data-role="expansion-out"]')).toContainText(
+    'Not run yet'
+  );
+  await scanAt('Compressed query: four fixed sixteen-record blocks, not run yet');
+
+  await page.getByRole('button', { name: 'Run direct and compressed queries' }).click();
+  await expect(page.locator('#panel-expand [data-role="expansion-out"] .verdict-pass')).toContainText(
+    'byte for byte'
+  );
+  await expect(page.locator('#panel-expand table')).toHaveCount(3);
+  await expect(
+    page.locator('#panel-expand table', { hasText: 'X → X^g' }).locator('tbody tr')
+  ).toHaveCount(4);
+  await expect(page.locator('#panel-expand')).toContainText(
+    'block 2 of 3; local index 9 — neither value is serialized as a plaintext field'
+  );
+  await expect(page.getByRole('button', { name: 'Run direct and compressed queries' })).toBeFocused();
+  await scanAt('Compressed query: four-block full-catalog expansion complete, record and tag agree');
+
+  await page.locator('#panel-expand details.disclose > summary').click();
+  await expect(page.locator('#panel-expand details[open]')).toHaveCount(1);
+  await scanAt('Compressed query: independent direct/plain/expanded checks disclosed');
+
+  // The result is key- and selection-dependent, so a key change must retire it.
+  await openTab(page, /The Shelf/, '#panel-shelf');
+  await page.getByRole('button', { name: 'Back to platform entropy' }).click();
+  await openTab(page, /Compressed Query/, '#panel-expand');
+  await expect(page.locator('#panel-expand [data-role="expansion-out"]')).toContainText(
+    'Result retired'
+  );
+  await scanAt('Compressed query: result retired after the secret key changed');
+
   // ── One Server vs Two ───────────────────────────────────────────────────
   await openTab(page, /One Server vs Two/, '#panel-versus');
   await expect(page.locator('#panel-versus [data-role="out"]')).toContainText('Not run yet');
@@ -948,8 +989,10 @@ export async function driveAllStates(page: Page, label: string): Promise<void> {
 
   // ── Noise Exhaustion ────────────────────────────────────────────────────
   await openTab(page, /Noise Exhaustion/, '#panel-noise');
-  await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText('Inside the table');
-  await scanAt('Noise: default parameters, inside the published security table');
+  await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText(
+    'At or below the comparison ceiling'
+  );
+  await scanAt('Noise: default modulus at or below the published comparison ceiling');
 
   await page.getByRole('button', { name: 'Retrieve at these settings' }).click();
   await expect(page.locator('#panel-noise [data-role="out"] .verdict-pass')).toContainText(
@@ -967,14 +1010,16 @@ export async function driveAllStates(page: Page, label: string): Promise<void> {
   );
   await scanAt('Noise: the budget exhausted — the answer decrypted, to garbage');
 
-  // The other end of the trade: enough modulus to be comfortable, and out of
-  // the standard's table for it.
+  // The other end of the trade: enough modulus to be comfortable, but above
+  // the standard's reference ceiling for it.
   await page.selectOption('#noise-modulus', '30');
   await expect(page.locator('#panel-noise .verdict-fail').first()).toContainText('PARAM_UNSAFE');
   await scanAt('Noise: PARAM_UNSAFE — a modulus past the table’s 128-bit ceiling');
 
   await page.selectOption('#noise-modulus', '26');
-  await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText('Inside the table');
+  await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText(
+    'At or below the comparison ceiling'
+  );
 
   // Every failure code, raised by its own button.
   for (const [button, code] of [

@@ -40,17 +40,18 @@ import { decrypt } from './bfv';
  * collude. Here there is one server and no collusion assumption, and the price
  * is the noise budget the meter on this page is counting down.
  *
- * WHAT THIS IS NOT. Full SealPIR does two more things that are out of scope in a
- * browser and named rather than faked:
- *   - QUERY EXPANSION. A real client sends ONE ciphertext plus Galois keys and
- *     the server expands it into the N-element selection vector with plaintext
- *     substitutions. That turns an O(N) upload into an O(1) one. This lab sends
- *     all N ciphertexts, which is why its upload column is enormous, and the
- *     head-to-head exhibit says so instead of quietly reporting SealPIR's number.
- *   - MULTI-DIMENSIONAL INDEXING. Treating the database as a d-dimensional cube
- *     turns N plaintext multiplications into d * N^(1/d), at the cost of
- *     ciphertext-by-ciphertext multiplications and therefore relinearization.
- *     One dimension is what fits the noise budget available here.
+ * THE DIRECT BASELINE. This module still sends all N ciphertexts, which is why
+ * its upload column is enormous. `expand.ts` separately executes a SealPIR-style
+ * representation in fixed 16-selector blocks: one client-prescaled monomial
+ * block and encrypted-zero cover blocks expand into the full vector before this
+ * same inner product is called for every block. Keeping the routes separate
+ * makes their bytes and noise comparable.
+ *
+ * WHAT REMAINS OUT OF SCOPE. Multi-dimensional indexing can reduce the number
+ * of database terms evaluated per dimension, at the cost of recursive encrypted
+ * processing and a larger response. This lab implements neither that recursion
+ * nor modulus switching. Query compression alone does not make this one-
+ * dimensional record scan sublinear.
  */
 
 /**

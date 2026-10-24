@@ -14,9 +14,10 @@
  * `NOISE_BUDGET_EXHAUSTED` is the important one: the ciphertext decrypts
  * perfectly well and simply yields the wrong bytes, so all anyone can do is
  * measure it and say so. `PARAM_UNSAFE` also reports rather than refuses when it
- * comes from the security table — the parameters still compute correct answers,
- * they just leave the published estimate behind, and refusing would delete the
- * exhibit that shows what leaving it buys.
+ * comes from the modulus-bit comparison — the parameters still compute correct
+ * answers, but exceed the cited table's ceiling. That does not itself prove
+ * insecurity, and refusing would delete the exhibit that shows what the larger
+ * modulus buys.
  *
  * Naming them is the whole point either way: a PIR answer that is quietly wrong
  * is indistinguishable from one that is quietly right, because the client cannot
@@ -32,10 +33,10 @@ export type FailureCode =
    *  server holds. Refused before any homomorphic work, because a shorter query
    *  silently answers over a prefix of the shelf and a longer one reads past it. */
   | 'DIM_MISMATCH'
-  /** The (ring degree, ciphertext modulus, secret distribution) triple is not a
-   *  row of the Homomorphic Encryption Security Standard's 128-bit table, or it
-   *  would push this implementation's integer arithmetic past 2^53 where
-   *  JavaScript numbers stop being exact. */
+  /** The ciphertext modulus exceeds the HES 2018 128-bit row's bit ceiling for
+   *  this ring degree, or it would push this implementation's integer arithmetic
+   *  past 2^53 where JavaScript numbers stop being exact. The first condition is
+   *  a failed reference comparison, not by itself proof of insecurity. */
   | 'PARAM_UNSAFE'
   /** The requested shelf position does not exist in the catalog. */
   | 'INDEX_OUT_OF_RANGE';

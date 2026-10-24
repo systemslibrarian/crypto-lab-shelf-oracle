@@ -23,10 +23,11 @@ export interface PirParams {
  * The ring degree, fixed at 1024.
  *
  * 1024 is the SMALLEST entry in the Homomorphic Encryption Security Standard's
- * table, which is the whole reason it was chosen: a lab that ran at n = 256
- * would be quoting no standard at all. Anything larger is out of reach of a
- * schoolbook O(n^2) multiply running inside a page — see `ring.ts` for why the
- * multiply is schoolbook and what the real thing does instead.
+ * table, which permits the limited modulus-bit comparison made in `security.ts`;
+ * the table's Gaussian-error security estimate is not transferred to this lab's
+ * centred-binomial tuple. Anything larger is out of reach of a schoolbook O(n^2)
+ * multiply running inside a page — see `ring.ts` for why the multiply is
+ * schoolbook and what the real thing does instead.
  */
 export const RING_DEGREE = 1024;
 
@@ -49,8 +50,10 @@ export const PLAIN_MODULUS = 17;
 export const BITS_PER_COEFF = 4;
 
 /**
- * Error distribution parameter. sigma = sqrt(21/2) = 3.2404..., at or above the
- * sigma = 3.19 the HES table is stated for, with hard support [-21, 21].
+ * Error distribution parameter. The centred-binomial law has
+ * sigma = sqrt(21/2) = 3.2404... and hard support [-21, 21]. The HES 2018 table
+ * uses a discrete Gaussian near the same sigma; those distribution shapes are
+ * not interchangeable, so `security.ts` makes only a modulus-bit comparison.
  */
 export const ERROR_ETA = 21;
 
@@ -66,10 +69,11 @@ export interface ModulusOption {
 /**
  * The selectable ciphertext moduli, each the largest prime below 2^logQ.
  *
- * The top entry is deliberately outside the standard. At n = 1024 the HES
- * 128-bit classical table stops at log q = 27, so 2^30 buys a great deal of
- * noise budget and pays for it by leaving the table — which is `PARAM_UNSAFE`,
- * and is the honest shape of the trade rather than a scolding banner.
+ * The top entry is deliberately above the HES 2018 table's modulus ceiling. At
+ * n = 1024 its 128-bit classical row stops at log q = 27, so 2^30 buys a great
+ * deal of noise budget while losing even that reference comparison. The page
+ * reports this as `PARAM_UNSAFE`; it does not claim that crossing the bit
+ * ceiling by itself proves insecurity.
  */
 export const MODULI: readonly ModulusOption[] = [
   { logQ: 18, q: 262139, label: '2^18' },
@@ -80,7 +84,7 @@ export const MODULI: readonly ModulusOption[] = [
   { logQ: 30, q: 1073741789, label: '2^30' },
 ];
 
-/** The modulus a fresh page loads with: the largest that stays inside the table. */
+/** The default: the largest selectable modulus below the table's 128-bit bit ceiling. */
 export const DEFAULT_MODULUS = MODULI[4];
 
 /** Selectable record sizes, in bytes. Two nibbles per byte, so 2 coefficients each. */

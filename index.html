@@ -20,7 +20,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Interactive demo of single-server computational private information retrieval: an RLWE selection vector encrypted under BFV, a homomorphic inner product over a 64-record catalog, and the noise budget it spends."
+      content="Interactive single-server PIR under BFV: direct one-hot queries, executable SealPIR-style compressed-query expansion, homomorphic selection, and measured noise and communication costs."
     />
     <meta name="author" content="systemslibrarian" />
     <meta name="color-scheme" content="dark" />
@@ -155,9 +155,10 @@
           <h1 class="cl-hero-title">Shelf Oracle</h1>
           <p class="cl-hero-sub">Single-server computational PIR · RLWE/BFV · SealPIR-style</p>
           <p class="cl-hero-desc">
-            Encrypt a one-hot selection vector under BFV, watch one server fold all 64 catalog
-            records into a single ciphertext it cannot read, and watch the noise budget pay for
-            the second server this protocol does not need.
+            Encrypt a one-hot selection vector under BFV, then compress 64 selectors into four
+            fixed ciphertext blocks and execute their Galois-key expansion. Watch one server scan
+            every record without learning the selected block or index, and account for serialized
+            bytes, major operations and the measured invariant-noise budget.
           </p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
@@ -181,17 +182,19 @@
           The classic way to do it needs <strong>two</strong> servers that never talk to each other.
           This lab does it with <strong>one</strong>. Instead of trusting operators not to collude,
           it hides the request inside encrypted numbers the server can compute on but not read.
-          The server multiplies every record by an encrypted 0 or 1, adds the results, and sends
-          back a single ciphertext — never having learned which of its records was the one.
+          In the direct exhibit, the server multiplies every record by an encrypted 0 or 1, adds
+          the results, and sends one ciphertext. The compressed exhibit sends four fixed query
+          blocks and receives four fixed responses so neither count identifies the selected block.
         </p>
       </div>
 
       <p class="scope-note">
         <strong>Not production cryptography.</strong> This is a teaching implementation: schoolbook
-        polynomial arithmetic, no constant-time discipline, the secret key in ordinary browser
-        memory, and a 64-record shelf. Both "servers" are objects in this page — no network is
-        involved. What is real is the mathematics: every ciphertext, every homomorphic multiply and
-        every noise measurement on this page is computed, not scripted.
+        record products, exact NTT/CRT only for dense expansion-key products, no constant-time
+        discipline, the secret key in ordinary browser memory, and a 64-record shelf. Both
+        "servers" are objects in this page — no network is involved. What is real is the
+        mathematics: every ciphertext, substitution, key switch, homomorphic multiply and noise
+        measurement on this page is computed, not scripted.
       </p>
 
       <nav class="tabs" aria-label="Exhibits">
@@ -199,6 +202,7 @@
           <button class="tab-btn" role="tab" id="tab-shelf" aria-selected="true" aria-controls="panel-shelf" data-panel="shelf">The Shelf</button>
           <button class="tab-btn" role="tab" id="tab-server" aria-selected="false" aria-controls="panel-server" data-panel="server" tabindex="-1">The Server's View</button>
           <button class="tab-btn" role="tab" id="tab-fold" aria-selected="false" aria-controls="panel-fold" data-panel="fold" tabindex="-1">Homomorphic Selection</button>
+          <button class="tab-btn" role="tab" id="tab-expand" aria-selected="false" aria-controls="panel-expand" data-panel="expand" tabindex="-1">Compressed Query</button>
           <button class="tab-btn" role="tab" id="tab-versus" aria-selected="false" aria-controls="panel-versus" data-panel="versus" tabindex="-1">One Server vs Two</button>
           <button class="tab-btn" role="tab" id="tab-noise" aria-selected="false" aria-controls="panel-noise" data-panel="noise" tabindex="-1">Noise Exhaustion</button>
           <button class="tab-btn" role="tab" id="tab-scope" aria-selected="false" aria-controls="panel-scope" data-panel="scope" tabindex="-1">What It Does Not Hide</button>
@@ -209,6 +213,7 @@
         <section id="panel-shelf" class="panel" role="tabpanel" aria-labelledby="tab-shelf" tabindex="0"></section>
         <section id="panel-server" class="panel" role="tabpanel" aria-labelledby="tab-server" tabindex="0" hidden></section>
         <section id="panel-fold" class="panel" role="tabpanel" aria-labelledby="tab-fold" tabindex="0" hidden></section>
+        <section id="panel-expand" class="panel" role="tabpanel" aria-labelledby="tab-expand" tabindex="0" hidden></section>
         <section id="panel-versus" class="panel" role="tabpanel" aria-labelledby="tab-versus" tabindex="0" hidden></section>
         <section id="panel-noise" class="panel" role="tabpanel" aria-labelledby="tab-noise" tabindex="0" hidden></section>
         <section id="panel-scope" class="panel" role="tabpanel" aria-labelledby="tab-scope" tabindex="0" hidden></section>

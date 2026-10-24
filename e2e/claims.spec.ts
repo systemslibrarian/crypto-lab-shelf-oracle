@@ -201,6 +201,166 @@ test.describe('the page tells the truth about what it retrieved', () => {
   });
 });
 
+test.describe('compressed-query expansion is executed and costed from this implementation', () => {
+  async function runBoundedExpansion(page: Page, index = 41): Promise<void> {
+    await boot(page);
+    await page.fill('#run-seed', 'claims-compressed-query');
+    await page.getByRole('button', { name: 'Pin this seed' }).click();
+    await expect(
+      page.locator('#panel-shelf [data-role="seed-status"] .verdict-alarm')
+    ).toContainText('claims-compressed-query');
+    await page.locator('#panel-shelf .shelf-item').nth(index).click();
+    await openTab(page, /Compressed Query/, '#panel-expand');
+    const run = page.getByRole('button', { name: 'Run direct and compressed queries' });
+    await run.click();
+    await expect(page.locator('#panel-expand [data-role="expansion-out"] .verdict-pass')).toContainText(
+      'byte for byte'
+    );
+    await expect(page.getByRole('button', { name: 'Run direct and compressed queries' })).toBeFocused();
+  }
+
+  test('CROSS-CHECK: direct, expanded and shelf routes return the same selected record', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.fill('#run-seed', 'claims-compressed-record');
+    await page.getByRole('button', { name: 'Pin this seed' }).click();
+    await expect(
+      page.locator('#panel-shelf [data-role="seed-status"] .verdict-alarm')
+    ).toContainText('claims-compressed-record');
+    await page.locator('#panel-shelf .shelf-item').nth(41).click();
+    const shelfText = (await page.locator('#panel-shelf .code').first().innerText()).trim();
+
+    await openTab(page, /Compressed Query/, '#panel-expand');
+    await page.getByRole('button', { name: 'Run direct and compressed queries' }).click();
+    await expect(page.locator('#panel-expand [data-role="expansion-out"] .verdict-pass')).toContainText(
+      'byte for byte'
+    );
+    const expandedText = (
+      await page.locator('#panel-expand [data-role="expanded-record"]').innerText()
+    ).trim();
+    expect(expandedText).toBe(shelfText);
+
+    const checks = page.locator('#panel-expand details', {
+      hasText: 'Independent correctness checks',
+    });
+    await checks.locator('summary').click();
+    await expect(checks).toContainText(`Plain record: ${shelfText}`);
+    await expect(checks).toContainText(`Direct route: ${shelfText}`);
+    await expect(checks).toContainText(`Compressed route, selected response: ${shelfText}`);
+    await expect(page.locator('#panel-expand')).toContainText(
+      'block 2 of 3; local index 9 — neither value is serialized as a plaintext field'
+    );
+  });
+
+  test('INDEPENDENT RE-DERIVATION: wire bytes, substitutions, operations and noise match the run', async ({
+    page,
+  }) => {
+    await runBoundedExpansion(page);
+
+    const ring = await page
+      .locator('#panel-expand dt', { hasText: 'Ring' })
+      .locator('xpath=following-sibling::dd[1]')
+      .innerText();
+    const n = Number(/n = (\d+)/.exec(ring)?.[1]);
+    const q = Number(/q = (\d+)/.exec(ring)?.[1]);
+    const digitText = await page
+      .locator('#panel-expand dt', { hasText: 'Binary gadget' })
+      .locator('xpath=following-sibling::dd[1]')
+      .innerText();
+    const digits = Number(/(\d+) digits/.exec(digitText)?.[1]);
+    const ciphertextBytes = Math.ceil((2 * n * Math.ceil(Math.log2(q))) / 8);
+
+    const costTable = page.locator('#panel-expand table', { hasText: 'Reusable setup sent once' });
+    const exactBytes = async (label: string, cell: number): Promise<number> => {
+      const text = await costTable.locator('tr', { hasText: label }).locator('td').nth(cell).innerText();
+      return Number(/^(\d+) B/.exec(text)?.[1]);
+    };
+    const directUpload = await exactBytes('Per-query upload', 0);
+    const compressedUpload = await exactBytes('Per-query upload', 1);
+    const evaluationKeys = await exactBytes('Reusable setup sent once', 1);
+    const firstCompressed = await exactBytes('First upload including setup', 1);
+    const directResponse = await exactBytes('Response', 0);
+    const compressedResponse = await exactBytes('Response', 1);
+
+    expect(compressedUpload).toBe(4 * ciphertextBytes);
+    expect(directUpload).toBe(64 * ciphertextBytes);
+    expect(directResponse).toBe(ciphertextBytes);
+    expect(compressedResponse).toBe(4 * ciphertextBytes);
+
+    const traceRows = page.locator('#panel-expand table', { hasText: 'X → X^g' }).locator('tbody tr');
+    await expect(traceRows).toHaveCount(4);
+    // Header (16 B), then one uint16 Galois element and `digits` ciphertexts
+    // for each of the four keys. This is a separate derivation from measuring
+    // the serialized buffer in the implementation.
+    expect(evaluationKeys).toBe(16 + 4 * (2 + digits * ciphertextBytes));
+    expect(firstCompressed).toBe(evaluationKeys + compressedUpload);
+
+    let totalSwitches = 0;
+    let totalConvolutions = 0;
+    for (let i = 0; i < 4; i += 1) {
+      const cells = traceRows.nth(i).locator('td');
+      const g = Number(await cells.nth(0).innerText());
+      const shape = await cells.nth(1).innerText();
+      const switches = Number(await cells.nth(2).innerText());
+      const convolutions = Number(await cells.nth(3).innerText());
+      const inputs = 2 ** i;
+      expect(g).toBe(n / inputs + 1);
+      expect(shape).toBe(`${inputs} → ${inputs * 2}`);
+      expect(switches).toBe(inputs);
+      expect(convolutions).toBe(inputs * digits * 2);
+      const [adds, shifts] = (await cells.nth(4).innerText()).split(' / ').map(Number);
+      expect(adds).toBe(2 * inputs);
+      expect(shifts).toBe(2 * inputs);
+      totalSwitches += switches;
+      totalConvolutions += convolutions;
+    }
+    expect(totalSwitches).toBe(15);
+    expect(totalConvolutions).toBe(15 * digits * 2);
+    const costCell = async (label: string, cell: number): Promise<string> =>
+      costTable.locator('tr', { hasText: label }).locator('td').nth(cell).innerText();
+    expect(await costCell('Client query encryptions', 0)).toBe('64');
+    expect(await costCell('Client query encryptions', 1)).toBe('4');
+    expect(await costCell('Server record products', 0)).toBe('64');
+    expect(await costCell('Server record products', 1)).toBe('64');
+    expect(Number(await costCell('Server expansion key switches', 1))).toBe(4 * totalSwitches);
+    expect(Number(await costCell('Exact key-switch convolutions', 1))).toBe(
+      4 * totalConvolutions
+    );
+
+    const crossoverText = await page
+      .locator('#panel-expand dt', { hasText: 'Amortized upload crossover' })
+      .locator('xpath=following-sibling::dd[1]')
+      .innerText();
+    const crossover = Number(/query (\d+)/.exec(crossoverText)?.[1]);
+    expect(crossover).toBe(Math.floor(evaluationKeys / (directUpload - compressedUpload)) + 1);
+
+    const noiseTable = page.locator('#panel-expand table', {
+      hasText: 'Selected compressed response',
+    });
+    const budget = async (label: string): Promise<number> =>
+      parseFloat(
+        await noiseTable.locator('tr', { hasText: label }).locator('td').innerText()
+      );
+    const directBudget = await budget('Direct answer');
+    const compressedBudget = await budget('Selected compressed response');
+    expect(compressedBudget).toBeGreaterThan(0);
+    expect(compressedBudget).toBeLessThan(directBudget);
+
+    await expect(page.locator('#panel-expand')).toContainText('does not claim sublinear server work');
+    await expect(page.locator('#panel-expand')).toContainText(
+      'Adding the four block folds has an inadequate, sample-dependent noise margin'
+    );
+    await expect(page.locator('#panel-expand')).toContainText('Discarded one-response trial');
+    await expect(page.locator('#panel-expand')).toContainText(
+      'requires an additional circular-security assumption'
+    );
+    await expect(
+      page.locator('#panel-expand a[href="https://eprint.iacr.org/2024/1587"]')
+    ).toContainText('Geelen and Vercauteren');
+  });
+});
+
 test.describe('the failure paths fire, and the page names the actual cause', () => {
   test('NOISE_BUDGET_EXHAUSTED is real: the same click succeeds at 2^26 and fails at 2^18', async ({
     page,
@@ -275,8 +435,8 @@ test.describe('the failure paths fire, and the page names the actual cause', () 
     await boot(page);
     await openTab(page, /Noise Exhaustion/, '#panel-noise');
 
-    // Route one: outside the published security table. The verdict must name the
-    // ceiling the page also prints in its own readout.
+    // Route one: above the published reference ceiling. The verdict must name
+    // the exact ceiling crossed; the page must not call that fact a proof.
     await page.selectOption('#noise-modulus', '30');
     await expect(page.locator('#panel-noise .verdict-fail').first()).toContainText('PARAM_UNSAFE');
     const ceiling = await page
@@ -285,6 +445,9 @@ test.describe('the failure paths fire, and the page names the actual cause', () 
       .innerText();
     await expect(page.locator('#panel-noise .verdict-fail').first()).toContainText(
       `log2 q = ${ceiling}`
+    );
+    await expect(page.locator('#panel-noise .verdict-fail').first()).toContainText(
+      'does not prove'
     );
     const logQ = await page
       .locator('#panel-noise dt', { hasText: 'log2 q' })
@@ -305,13 +468,13 @@ test.describe('the failure paths fire, and the page names the actual cause', () 
     await boot(page);
     await openTab(page, /Noise Exhaustion/, '#panel-noise');
     await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText(
-      'Inside the table'
+      'At or below the comparison ceiling'
     );
     await page.selectOption('#noise-modulus', '30');
     await expect(page.locator('#panel-noise .verdict-fail').first()).toContainText('PARAM_UNSAFE');
     await page.selectOption('#noise-modulus', '26');
     await expect(page.locator('#panel-noise .verdict-pass').first()).toContainText(
-      'Inside the table'
+      'At or below the comparison ceiling'
     );
   });
 
@@ -422,6 +585,7 @@ test.describe('the negative claim, shown', () => {
       'Which record was requested',
       'Whether the response length reveals it',
       'Whether the query length reveals it',
+      'Sequence of requested indices',
     ]) {
       await expect(table.locator('tr', { hasText: property }).locator('.pill-ok')).toContainText(
         'Hidden by the protocol'
@@ -516,7 +680,7 @@ test.describe('the page is what it says it is', () => {
    *
    * A class rule that sets `display` outranks the UA's `[hidden]` rule, so an
    * element can carry the attribute, be believed hidden by the code, and paint
-   * anyway. This lab hit exactly that: `.panel { display: grid }` kept five
+   * anyway. This lab hit exactly that: `.panel { display: grid }` kept six
    * `[hidden]` tabpanels in the layout as zero-height grids, still in the tab
    * order. `#app [hidden] { display: none }` closes it, and this asserts the
    * OUTCOME rather than the rule.

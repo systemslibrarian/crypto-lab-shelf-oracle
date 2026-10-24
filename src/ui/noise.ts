@@ -28,12 +28,12 @@ import { Rng } from '../pir/rng';
 import { shelfToPlaintexts } from '../pir/records';
 
 /**
- * Act five: push it until it breaks, then read the failure codes.
+ * Act six: push it until it breaks, then read the failure codes.
  *
  * Three knobs, all of which move real arithmetic — the ciphertext modulus, the
  * record size and the shelf length. Two of them buy payload and cost budget; the
- * third buys budget and, past a point, costs the only security estimate this
- * lab can honestly quote.
+ * third buys budget and, past a point, crosses the only published modulus-bit
+ * ceiling this lab compares against.
  *
  * The exhaustion is not simulated. At the smallest modulus a sixty-four-record
  * answer genuinely decrypts to garbage, the record's own integrity tag genuinely
@@ -163,9 +163,9 @@ export function renderNoise(root: HTMLElement, lab: Lab): void {
 
   append(
     root,
-    card('The parameters, judged against a published table', [
-      assessment.inTable
-        ? verdict('pass', [el('strong', {}, 'Inside the table. '), assessment.summary])
+    card('Parameter bit sizes compared with a published table', [
+      assessment.atOrBelow128BitCeiling
+        ? verdict('pass', [el('strong', {}, 'At or below the comparison ceiling. '), assessment.summary])
         : verdict('fail', [
             el('span', { class: 'fail-code' }, 'PARAM_UNSAFE'),
             ' — ',
@@ -183,14 +183,16 @@ export function renderNoise(root: HTMLElement, lab: Lab): void {
         'p',
         { class: 'callout callout-caveat' },
         [
-          el('strong', {}, 'What "inside the table" is worth. '),
+          el('strong', {}, 'What this comparison is worth. '),
           `The Homomorphic Encryption Security Standard (HomomorphicEncryption.org, November 2018) ` +
             `tabulates, for each ring degree, the largest modulus at which the underlying RLWE ` +
-            `problem was estimated to reach a given security level. A row is an estimate from 2018, ` +
-            `not a proof and not a current one. It also says nothing about this implementation: the ` +
+            `problem was estimated to reach a given security level using discrete-Gaussian error. ` +
+            `This lab uses a centered-binomial law, so matching only n and the modulus bit length does ` +
+            `not transfer that estimate. A row is from 2018, not a proof or a current estimate. It ` +
+            `also says nothing about this implementation: the ` +
             `arithmetic here is not constant time, the secret key sits in ordinary browser memory, ` +
-            `and none of it has been audited. Passing the table means the parameters are not ` +
-            `obviously broken. It does not mean this page is secure, and it is not.`,
+            `and none of it has been audited. This is a reference bit-size comparison only. It does ` +
+            `not mean this page is secure, and it is not.`,
         ]
       ),
       budgetTable(lab),
@@ -199,16 +201,16 @@ export function renderNoise(root: HTMLElement, lab: Lab): void {
 
   append(root, card('The failure codes', failureLab()));
 
-  announce(root, noiseHeadline(s.selectedIndex, assessment.inTable));
+  announce(root, noiseHeadline(s.selectedIndex, assessment.atOrBelow128BitCeiling));
 
   bind(root, lab);
 }
 
-function noiseHeadline(index: number, inTable: boolean): string {
+function noiseHeadline(index: number, atOrBelowCeiling: boolean): string {
   if (state.runFailure) return `${state.runFailure.code}: the retrieval was refused.`;
-  const params = inTable
-    ? 'Parameters inside the published table.'
-    : 'PARAM_UNSAFE: parameters outside the published table.';
+  const params = atOrBelowCeiling
+    ? 'Modulus size at or below the published comparison ceiling.'
+    : 'PARAM_UNSAFE: modulus size above the published comparison ceiling.';
   if (state.running) return `${params} Running a retrieval.`;
   if (state.decoded) {
     return state.decoded.failure
@@ -415,7 +417,7 @@ const FAILURE_BLURB: Record<string, string> = {
     'the query is not the same length as the shelf, so it would answer over a prefix or read past ' +
     'the end. Refused before any homomorphic work.',
   PARAM_UNSAFE:
-    'the parameters are outside the published security table, or would push this implementation ' +
+    'the modulus exceeds the published reference ceiling, or would push this implementation ' +
     'past the range where JavaScript integers are exact.',
   INDEX_OUT_OF_RANGE: 'the requested shelf position does not exist.',
 };
@@ -457,7 +459,7 @@ function bind(root: HTMLElement, lab: Lab): void {
     trip(root, lab, () => {
       const s = lab.snapshot();
       // A modulus far past anything selectable, to reach the exactness guard
-      // rather than the security table — both raise PARAM_UNSAFE, and this is
+      // rather than the table comparison — both raise PARAM_UNSAFE, and this is
       // the branch the table above does not already show.
       assertExactArithmetic({ ...s.params, q: 2 ** 44 });
     });
