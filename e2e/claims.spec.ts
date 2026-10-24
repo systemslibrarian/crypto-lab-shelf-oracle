@@ -455,11 +455,19 @@ test.describe('stateful preprocessing PIR executes the claims it prints', () => 
     );
 
     await page.locator('#panel-stateful [data-role="stateful-repeat"]').click();
+    // The busy render deliberately keeps the preceding transcript visible.
+    // Wait on the committed-request ledger, not on a value that can still be
+    // the first exchange while the cover query is in flight.
+    await expect(
+      valueLocator(page, '#panel-stateful', 'Requests committed')
+    ).toHaveText('2');
+    await expect(
+      valueLocator(page, '#panel-stateful', 'Local route')
+    ).toHaveText('cached-cover');
     const coverEffective = Number(
       await valueAfter(page, '#panel-stateful', 'Effective target')
     );
     expect(coverEffective).not.toBe(firstEffective);
-    expect(await valueAfter(page, '#panel-stateful', 'Local route')).toBe('cached-cover');
     expect(await valueAfter(page, '#panel-stateful', 'Requests committed')).toBe('2');
     expect(await valueAfter(page, '#panel-stateful', 'Unique effective targets spent')).toBe('2');
     await expect(page.locator('#panel-stateful [data-role="stateful-repeat"]')).toBeFocused();
