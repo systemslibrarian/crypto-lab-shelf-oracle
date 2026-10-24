@@ -13,7 +13,7 @@ import {
  * WCAG A/AA regression gate.
  *
  * The lab is driven along everything it teaches: the arrival state, where The
- * Shelf is active with position 0 selected and the other five tabpanels are
+ * Shelf is active with position 0 selected and the other six tabpanels are
  * hidden and UNRENDERED; the shared skip link focused; a different book chosen;
  * the byte-to-coefficient packing table opened through its summary; a shorter
  * record and a tiled 128-position shelf; the encrypted selection vector with a
@@ -21,7 +21,9 @@ import {
  * distinguisher result that saturates under it; the homomorphic fold at step 0,
  * at one record, at nine, and complete with its decrypted record and integrity
  * check, then reset; the decryption identity and the why-the-sum-selects
- * derivation opened; both protocols measured head to head and the two servers
+ * derivation opened; the four-block compressed query before and after expansion,
+ * with its independent checks disclosed and then its key-dependent result retired;
+ * both protocols measured head to head and the two servers
  * colluding to recover the index; a successful retrieval and then a genuinely
  * exhausted noise budget; PARAM_UNSAFE raised by a modulus past the standard's
  * ceiling; all four failure codes raised by the controls that cause them; the
@@ -63,7 +65,7 @@ test('no WCAG A/AA violations at 380px', async ({ page }) => {
   reportCollected();
 });
 
-test('no WCAG A/AA violations at 320px — the reflow threshold', async ({ page }) => {
+test('no WCAG A/AA violations at 280px — headroom below the reflow threshold', async ({ page }) => {
   test.setTimeout(1_800_000);
   const errors = watchPageErrors(page);
   await page.setViewportSize(REFLOW);

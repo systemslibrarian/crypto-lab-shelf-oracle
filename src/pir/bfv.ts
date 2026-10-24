@@ -19,12 +19,13 @@ import {
  * set of the SealPIR inner product — the server multiplies each of its own
  * PLAINTEXT records by an encrypted selection bit and adds the results.
  *
- * WHAT IS DELIBERATELY ABSENT: ciphertext-by-ciphertext multiplication, and
- * therefore relinearization and key switching. Not an omission — a consequence.
- * The one-hot form of PIR never multiplies two ciphertexts, which is precisely
- * why it fits in a 2^26 modulus at all: a plaintext multiply grows the noise by
- * a factor bounded by the plaintext's own size, where a ciphertext multiply
- * grows it by a factor of q. FHE Arena is the lab that shows the expensive kind.
+ * WHAT IS DELIBERATELY ABSENT FROM THIS CORE: ciphertext-by-ciphertext
+ * multiplication and relinearization. The direct one-hot form never needs
+ * either. The bounded query-expansion lesson in `expand.ts` does add the other
+ * operation the direct path avoids — Galois key switching — and accounts for
+ * its auxiliary keys and noise separately. A plaintext multiply grows the
+ * noise by a factor bounded by the plaintext's own size, where a ciphertext
+ * multiply grows it by a factor of q. FHE Arena shows that expensive kind.
  *
  * NOISE. A fresh ciphertext satisfies c0 + c1*s = Delta*m + e (mod q) with e
  * small. Every operation adds to e; decryption is correct while e stays under

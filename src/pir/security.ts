@@ -2,15 +2,15 @@ import type { PirParams } from './params';
 import { ERROR_SIGMA } from './params';
 
 /**
- * What the parameters are worth, taken from a published table rather than
- * asserted.
+ * A modulus-bit comparison against a published table.
  *
  * SOURCE: *Homomorphic Encryption Security Standard*, Albrecht, Chase, Chen,
  * Ding, Goldwasser, Gorbunov, Halevi, Hoffstein, Laine, Lauter, Lokam,
  * Micciancio, Moody, Morrison, Sahai and Vaikuntanathan, HomomorphicEncryption.org,
  * Toronto, November 2018 — the UNIFORM TERNARY SECRET table, classical security,
- * error standard deviation sigma = 3.19. Each row gives the LARGEST log2(q) for
- * which the stated security level is estimated to hold at that ring degree.
+ * discrete-Gaussian error standard deviation sigma about 3.19. Each row gives
+ * the LARGEST log2(q) for which the stated security level is estimated to hold
+ * at that ring degree under those assumptions.
  *
  * WHY A TABLE AND NOT AN ESTIMATOR. The honest alternative is to re-implement
  * the primal-uSVP / BKZ cost model and print a bit count of our own. That model
@@ -18,12 +18,18 @@ import { ERROR_SIGMA } from './params';
  * be a number this lab invented, dressed as a measurement. Quoting the published
  * table names the source, the assumptions and the date, and makes it checkable.
  *
- * WHAT THIS DOES NOT SAY. A row in this table is an estimate of the hardness of
- * the underlying RLWE instance in 2018. It is not a proof, it does not account
- * for advances since, and it says nothing whatsoever about this implementation:
- * the polynomial arithmetic here is not constant time, the secret key sits in
- * ordinary JavaScript memory, and nothing has been audited. "In the table" means
- * the parameters are not obviously broken, not that the demo is secure.
+ * DISTRIBUTION BOUNDARY. This lab deliberately samples centred-binomial error
+ * with eta=21 (sigma about 3.24), not the table's discrete Gaussian. Equal or
+ * nearby standard deviations do not make differently shaped distributions
+ * interchangeable in a concrete security estimate. We therefore compare only
+ * (n, ceil(log2(q))) with the published bit ceilings; we do not claim that the
+ * table's security estimate transfers to this parameter tuple.
+ *
+ * WHAT THIS DOES NOT SAY. A row is a 2018 estimate, not a proof. It does not
+ * account for subsequent attacks and says nothing about this implementation:
+ * the arithmetic is not constant time, the secret key sits in ordinary
+ * JavaScript memory, and nothing has been audited. Being at or below a published
+ * modulus ceiling is only a reference comparison, not a security certification.
  */
 export const HES_TERNARY_CLASSICAL: Readonly<Record<number, Readonly<Record<number, number>>>> = {
   // ring degree -> { security level in bits -> max log2(q) }
@@ -43,12 +49,12 @@ export interface SecurityAssessment {
   readonly n: number;
   /** log2 of the ciphertext modulus in use, rounded up to the whole bit. */
   readonly logQ: number;
-  /** The largest level in the table this (n, log q) pair satisfies, or 0. */
-  readonly level: number;
+  /** Strongest table row whose modulus-bit ceiling is at least logQ, or 0. */
+  readonly referenceLevel: number;
   /** The 128-bit ceiling for this ring degree, or null if n is not in the table. */
   readonly ceiling128: number | null;
-  /** True when the pair satisfies at least the 128-bit row. */
-  readonly inTable: boolean;
+  /** True when logQ is at or below the table's 128-bit modulus ceiling. */
+  readonly atOrBelow128BitCeiling: boolean;
   /** A one-line, source-attributed summary for the page. */
   readonly summary: string;
 }
@@ -67,27 +73,30 @@ export function assessSecurity(p: PirParams): SecurityAssessment {
     return {
       n: p.n,
       logQ,
-      level: 0,
+      referenceLevel: 0,
       ceiling128: null,
-      inTable: false,
+      atOrBelow128BitCeiling: false,
       summary:
         `Ring degree n = ${p.n} is not a row of the HES 2018 table (it starts at 1024), ` +
-        `so no published estimate applies.`,
+        `so no published modulus-bit comparison is available.`,
     };
   }
-  let level = 0;
+  let referenceLevel = 0;
   for (const candidate of HES_LEVELS) {
     if (logQ <= row[candidate]) {
-      level = candidate;
+      referenceLevel = candidate;
       break;
     }
   }
   const ceiling128 = row[128];
-  const inTable = level >= 128;
-  const summary = inTable
-    ? `n = ${p.n}, log2 q = ${logQ}, uniform ternary secret, sigma = ${ERROR_SIGMA.toFixed(2)} ` +
-      `sits inside the HES 2018 table's ${level}-bit classical row (ceiling log2 q = ${row[level]}).`
+  const atOrBelow128BitCeiling = referenceLevel >= 128;
+  const summary = atOrBelow128BitCeiling
+    ? `n = ${p.n}, ceil(log2 q) = ${logQ} is at or below the HES 2018 ` +
+      `${referenceLevel}-bit classical row's modulus ceiling of ${row[referenceLevel]} under its ` +
+      `discrete-Gaussian-error model. This lab uses centred-binomial eta = 21 ` +
+      `(sigma = ${ERROR_SIGMA.toFixed(2)}), so this is a bit-size comparison, not a transferred security estimate.`
     : `n = ${p.n}, log2 q = ${logQ} exceeds the HES 2018 table's 128-bit ceiling of ` +
-      `log2 q = ${ceiling128} for this ring degree. No published estimate covers it.`;
-  return { n: p.n, logQ, level, ceiling128, inTable, summary };
+      `log2 q = ${ceiling128} for this ring degree. No comparison with that published ceiling supports this choice; ` +
+      `that fact alone does not prove the tuple insecure.`;
+  return { n: p.n, logQ, referenceLevel, ceiling128, atOrBelow128BitCeiling, summary };
 }

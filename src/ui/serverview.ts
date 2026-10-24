@@ -129,7 +129,8 @@ export function renderServerView(root: HTMLElement, lab: Lab): void {
         { class: 'inline-note' },
         `Those byte counts are measured — the query really is serialized, ` +
           `${Math.ceil(Math.log2(s.params.q))} bits per coefficient, and its length read back. ` +
-          `A real SealPIR client would send far less; see One Server vs Two.`
+          `The Compressed Query exhibit executes the four-block, full-catalog alternative and ` +
+            `counts its reusable evaluation keys separately.`
       ),
     ])
   );

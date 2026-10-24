@@ -7,9 +7,10 @@ import { renderFold, resetFold } from './ui/fold';
 import { renderVersus, resetVersus } from './ui/versus';
 import { renderNoise, resetNoise } from './ui/noise';
 import { renderScope, resetScope } from './ui/scope';
+import { renderExpand, resetExpand } from './ui/expand';
 
 /**
- * The shell: six tabs, one lab state, and a rule about when panels rebuild.
+ * The shell: seven tabs, one lab state, and a rule about when panels rebuild.
  *
  * Panels render LAZILY — a tab that has never been opened has an empty panel —
  * and every mounted panel re-renders when the lab's parameters change. That
@@ -18,12 +19,13 @@ import { renderScope, resetScope } from './ui/scope';
  * rather than showing a stale ciphertext beside a new parameter set.
  */
 
-type PanelId = 'shelf' | 'server' | 'fold' | 'versus' | 'noise' | 'scope';
+type PanelId = 'shelf' | 'server' | 'fold' | 'expand' | 'versus' | 'noise' | 'scope';
 
 const RENDERERS: Record<PanelId, (root: HTMLElement, lab: Lab) => void> = {
   shelf: renderShelf,
   server: renderServerView,
   fold: renderFold,
+  expand: renderExpand,
   versus: renderVersus,
   noise: renderNoise,
   scope: renderScope,
@@ -40,6 +42,7 @@ const RENDERERS: Record<PanelId, (root: HTMLElement, lab: Lab) => void> = {
 function invalidateCaches(reason: string): void {
   resetServerView(reason);
   resetFold(reason);
+  resetExpand(reason);
   resetVersus(reason);
   resetNoise(reason);
   resetScope(reason);

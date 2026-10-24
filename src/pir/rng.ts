@@ -106,9 +106,10 @@ export class Rng {
   /**
    * Uniform ternary: −1, 0 or +1 with probability 1/3 each.
    *
-   * This is the secret-key distribution the Homomorphic Encryption Security
-   * Standard's table is stated for, which is why the lab can quote that table
-   * for its own parameters. See `security.ts`.
+   * This is the secret-key distribution used by the cited Homomorphic Encryption
+   * Standard table. Its error distribution is different from this lab's, so
+   * `security.ts` quotes only the table's modulus-bit ceilings and explicitly
+   * declines to transfer its security estimates.
    */
   ternary(): number {
     return this.uniformBelow(3) - 1;
@@ -119,10 +120,10 @@ export class Rng {
    * independent eta-bit draws, giving standard deviation sqrt(eta / 2).
    *
    * The same distribution family Kyber and NewHope sample their error from. At
-   * eta = 21 the deviation is sqrt(10.5) ≈ 3.24, at or above the sigma = 3.19
-   * the HES table assumes, and the support is bounded by ±21 — a hard bound the
-   * noise-growth arithmetic in `bfv.ts` can rely on, which an unbounded discrete
-   * Gaussian would not give.
+   * eta = 21 the deviation is sqrt(10.5) ≈ 3.24 and the support is bounded by
+   * ±21 — a hard bound the noise-growth arithmetic in `bfv.ts` can rely on,
+   * which an unbounded discrete Gaussian would not give. HES 2018 instead uses
+   * a discrete Gaussian; a similar deviation does not make the laws equivalent.
    */
   cbd(eta: number): number {
     if (!Number.isInteger(eta) || eta < 1 || eta > 32) {
