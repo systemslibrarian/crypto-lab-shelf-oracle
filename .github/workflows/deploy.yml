@@ -65,6 +65,23 @@ jobs:
       - name: Browser gate (axe WCAG A/AA + claims)
         run: npm run test:a11y
 
+      # Clean-baseline mutation gate. Seventeen named source mutations, each
+      # owned by ONE named test (twelve Vitest, five Playwright claims). Every
+      # recipe must change the production bundle and turn its owner red on a
+      # test failure; timeouts, crashes and a preview server that failed to
+      # start are refused rather than counted. Until this step existed the
+      # README's "seventeen mutations" could only be reproduced by hand.
+      - name: Mutation gate (clean baseline, named owning tests)
+        run: npm run test:mutations
+
+      - name: Upload mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-evidence
+          path: mutation-evidence.json
+          if-no-files-found: error
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 

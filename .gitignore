@@ -11,3 +11,6 @@ dist
 playwright-report
 test-results
 chat.md
+
+# written by scripts/mutations.mjs on every run; CI uploads it as an artifact
+mutation-evidence.json
