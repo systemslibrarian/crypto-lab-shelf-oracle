@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chacha20 as nobleChaCha20 } from '@noble/ciphers/chacha.js';
 import { chachaBlock, chachaBlockWords, chacha20Xor } from './chacha20';
 import { Rng, popcount32 } from './rng';
 
@@ -74,6 +75,18 @@ describe('ChaCha20 — RFC 8439 known-answer tests', () => {
     const message = new TextEncoder().encode('the shelf keeps no record of what you asked for');
     const roundTrip = chacha20Xor(key, 1, nonce, chacha20Xor(key, 1, nonce, message));
     expect(hex(roundTrip)).toBe(hex(message));
+  });
+});
+
+describe('ChaCha20 — independent implementation', () => {
+  it('agrees with @noble/ciphers across four blocks from a nonzero counter', () => {
+    const key = Uint8Array.from({ length: 32 }, (_, i) => (i * 29 + 7) & 0xff);
+    const nonce = Uint8Array.from({ length: 12 }, (_, i) => (0xf0 - i * 11) & 0xff);
+    const plaintext = Uint8Array.from({ length: 193 }, (_, i) => (i * 17 + 3) & 0xff);
+    const counter = 7;
+
+    const expected = nobleChaCha20(key, nonce, plaintext, undefined, counter);
+    expect(hex(chacha20Xor(key, counter, nonce, plaintext))).toBe(hex(expected));
   });
 });
 
